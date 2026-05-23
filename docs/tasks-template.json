@@ -1,0 +1,28 @@
+{
+  "tasks": [
+    {
+      "title": "שם המשימה",
+      "projectId": "timeraligner",
+      "domainId": "sales",
+      "bucket": "today",
+      "date": "2026-05-07",
+      "scheduledTimeLabel": "היום",
+      "estimatedDurationMinutes": 30,
+      "priority": "medium",
+      "effort": "medium",
+      "isQuickWin": false,
+      "isRecurring": false,
+      "backlogGroup": null,
+      "tags": ["tag1", "tag2"],
+      "whyNow": "למה זה חשוב עכשיו",
+      "notes": "הערות חופשיות",
+      "subtasks": [
+        {
+          "title": "תת־משימה ראשונה",
+          "estimatedDurationMinutes": 10,
+          "toolsNeeded": "כלי נדרש אם יש"
+        }
+      ]
+    }
+  ]
+}
