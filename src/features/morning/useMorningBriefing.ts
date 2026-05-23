@@ -323,7 +323,6 @@ export function useMorningBriefing({
     setVoiceError('');
     setMorningPublishStatus('');
     setMorningPlayProgress(8);
-    setShowMorningBriefing(true);
     setIsMorningLoading(true);
     const weather = await fetchWeatherBrief(settings, todayISO);
     setMorningWeather(weather);

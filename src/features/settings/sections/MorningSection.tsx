@@ -43,9 +43,13 @@ export function MorningSection({
   const { dragIdx, dragOverIdx, startTouch, endTouch, startDrag, overDrag, leaveDrag, dropDrag, endDrag } =
     useDragSort(containerRef, reorderSection);
 
-  const handlePreviewOpen = () => {
-    setEditText(morningPreview?.text ?? '');
-    setPreviewOpen(true);
+  const handlePreviewToggle = () => {
+    if (previewOpen) {
+      setPreviewOpen(false);
+    } else {
+      setEditText(morningPreview?.text ?? '');
+      setPreviewOpen(true);
+    }
   };
 
   return (
@@ -65,7 +69,7 @@ export function MorningSection({
               <button
                 type="button"
                 className="rounded-2xl bg-sky-100 px-3 py-2 text-xs font-black text-sky-800 ring-1 ring-sky-200 transition hover:bg-sky-200"
-                onClick={handlePreviewOpen}
+                onClick={handlePreviewToggle}
               >
                 {previewOpen ? 'סגור' : 'פתח נאום'}
               </button>
