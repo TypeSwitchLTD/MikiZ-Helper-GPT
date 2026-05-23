@@ -139,16 +139,47 @@ export function useMissionControlData() {
       return { ok: false, error: message };
     }
     setCloudSyncStatus('טוען מהענן...');
-    const result = await pullCloudSyncPayload(localData.settings);
-    if (result.ok && result.payload && result.payload.settings) {
-      await importDailyStatePayload(result.payload);
+    try {
+      const result = await pullCloudSyncPayload(localData.settings);
+      if (!result.ok || !result.payload) {
+        setCloudSyncStatus(`שגיאת טעינה מהענן: ${result.error ?? 'לא נמצא מידע בענן'}`);
+        return result;
+      }
+      // Merge: always preserve local API tokens — never let a cloud pull erase them
+      const local = localData.settings;
+      const cloud = result.payload.settings;
+      const mergedSettings: AppSettings | null = cloud && local ? {
+        ...cloud,
+        voice: {
+          ...cloud.voice,
+          elevenLabsApiKey: local.voice?.elevenLabsApiKey || cloud.voice?.elevenLabsApiKey || '',
+          elevenLabsVoiceId: local.voice?.elevenLabsVoiceId || cloud.voice?.elevenLabsVoiceId || '',
+          elevenLabsProxyUrl: local.voice?.elevenLabsProxyUrl || cloud.voice?.elevenLabsProxyUrl || '',
+        },
+        morningBriefing: {
+          ...cloud.morningBriefing,
+          androidPublishToken: local.morningBriefing?.androidPublishToken || cloud.morningBriefing?.androidPublishToken || '',
+          androidPublishEndpoint: local.morningBriefing?.androidPublishEndpoint || cloud.morningBriefing?.androidPublishEndpoint || '/api/morning-briefing',
+        },
+        instantly: { apiKey: local.instantly?.apiKey || cloud.instantly?.apiKey },
+      } : (cloud ?? local ?? null);
+
+      const mergedPayload = { ...result.payload, settings: mergedSettings };
+      const tasks = Array.isArray(mergedPayload.tasks) ? mergedPayload.tasks : [];
+      const subtasks = Array.isArray(mergedPayload.subtasks) ? mergedPayload.subtasks : [];
+      // Skip the tasks-required check for cloud pulls — settings sync is valid even with no tasks
+      if (tasks.length > 0 || subtasks.length > 0 || mergedSettings) {
+        await importDailyStatePayload(mergedPayload);
+      }
       const nextData = await getAllLocalData();
       setData(nextData);
-      setCloudSyncStatus(`נטען מהענן: ${result.counts?.tasks ?? nextData.tasks.length} משימות`);
-    } else {
-      setCloudSyncStatus(`שגיאת טעינה מהענן: ${result.error ?? 'לא נמצא מידע בענן'}`);
+      setCloudSyncStatus(`נטען מהענן: ${result.counts?.tasks ?? tasks.length} משימות`);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'שגיאה לא ידועה בטעינה מהענן';
+      setCloudSyncStatus(`שגיאת טעינה מהענן: ${message}`);
+      return { ok: false, error: message };
     }
-    return result;
   }, []);
 
   const reloadDataAndPushCloud = useCallback(async () => {
