@@ -125,6 +125,20 @@ export class MissionControlDatabase extends Dexie {
         });
       } catch { /* never block db open */ }
     });
+
+    this.version(6).stores({
+      tasks: 'id, bucket, date, projectId, domainId, originalDate, movedToDate, focusOrder, createdAt, updatedAt',
+      subtasks: 'id, taskId, status, sortOrder, createdAt, updatedAt',
+      dailyPlans: 'id, date, createdAt, updatedAt',
+      recurringDefinitions: 'id, isActive, frequency, projectId, domainId, createdAt, updatedAt',
+      reports: 'id, date, generatedAt, createdAt, updatedAt',
+      logs: 'id, timestamp, type, entityType, entityId',
+      reminders: 'id, remindAt, taskId, subtaskId, status, createdAt, updatedAt',
+      settings: 'id',
+      snapshots: 'id, createdAt, reason',
+      habits: 'id, active, order, createdAt, updatedAt',
+      habitLogs: 'id, habitId, date, [habitId+date], createdAt',
+    });
   }
 }
 
