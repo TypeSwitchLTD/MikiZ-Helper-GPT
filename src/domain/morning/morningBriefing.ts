@@ -175,19 +175,14 @@ function getMotivationLine(todayISO: string, settings: AppSettings | null): stri
 }
 
 function getReminderLines(input: BuildMorningBriefingInput): string[] {
-  const topTasks = pickMorningTasks(input.tasks, input.subtasks, input.todayISO);
-  const reminders = [
-    'לקום ולעשות תרגיל בוקר קצר. שתי דקות, בלי משא ומתן.',
-    input.weather?.shabbatLabel && input.weather.shabbatTime ? `${input.weather.shabbatLabel} היום ב${input.weather.shabbatTime}.` : 'לשתות מים לפני שאתה נכנס לעבודה.',
+  return [
+    'לשתות מים לפני שנכנסים לעבודה.',
+    input.weather?.shabbatLabel && input.weather.shabbatTime
+      ? `${input.weather.shabbatLabel} היום ב${input.weather.shabbatTime}.`
+      : input.leadTaskCount > 0
+        ? 'לידים לא מחכים — לפתוח את זה ראשון.'
+        : 'לבחור משימה אחת מהבאקלוג ולהכניס אותה להיום.',
   ];
-  if (topTasks.length > 0) {
-    reminders.push(`לפתוח קודם את ${cleanTaskTitle(topTasks[0].title)}.`);
-  } else if (input.leadTaskCount > 0) {
-    reminders.push('לעבור על מצב הלידים ולבחור פעולה אחת קטנה.');
-  } else {
-    reminders.push('לבחור משימה אחת מהבאקלוג ולהכניס אותה להיום.');
-  }
-  return reminders.slice(0, 3);
 }
 
 function getClosing(todayISO: string, settings: AppSettings | null): string {
@@ -251,19 +246,17 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
   ].filter(Boolean).join(' ');
 
   const sectionMap: Record<string, { enabled: boolean; text: string }> = {
-    summary: { enabled: morning?.includeSummary !== false, text: `סיכום מצב היום: ${summaryLine}` },
-    greeting: { enabled: morning?.includeGreeting !== false, text: `בוקר טוב ${nickname}.\n\nבזמן שאני ${narratorVerb} לך בריף על היום, תן לעצמך רגע להתעורר.` },
-    date: { enabled: morning?.includeDate !== false, text: `היום ${dayText}${hebrewDate ? `, ${hebrewDate}` : ''}.` },
+    greeting: { enabled: morning?.includeGreeting !== false, text: `בוקר טוב ${nickname}. היום ${dayText}${hebrewDate ? `, ${hebrewDate}` : ''}.` },
     weather: { enabled: morning?.includeWeather !== false, text: weatherLine },
     motivation: { enabled: morning?.includeMotivation !== false, text: motivationLine },
     exercise: { enabled: morning?.includeExerciseReminder !== false, text: morning?.exerciseLine || 'קום, תעשה תרגיל בוקר קצר, ותכניס אנרגיה לגוף לפני המסך.' },
-    reminders: { enabled: morning?.includeReminders !== false, text: `תזכורות להיום: ${reminderLines.join(' ')}` },
-    topTasks: { enabled: morning?.includeTopTasks !== false, text: `משימות בפוקוס: ${taskLines.join(' ')}` },
+    topTasks: { enabled: morning?.includeTopTasks !== false, text: `המשימות שמחכות להיום:\n${taskLines.join('\n')}` },
     leads: { enabled: morning?.includeLeads !== false, text: leadLine },
+    reminders: { enabled: morning?.includeReminders !== false, text: reminderLines.join(' ') },
     closing: { enabled: morning?.includeClosing !== false, text: getClosing(input.todayISO, input.settings) },
   };
 
-  const defaultOrder = ['summary', 'topTasks', 'reminders', 'weather', 'motivation', 'exercise', 'leads', 'greeting', 'closing'];
+  const defaultOrder = ['greeting', 'weather', 'motivation', 'exercise', 'topTasks', 'leads', 'reminders', 'closing'];
   const savedOrder = Array.isArray(morning?.sectionOrder) ? morning.sectionOrder : [];
   const order = [...savedOrder.filter((id) => id in sectionMap), ...defaultOrder.filter((id) => !savedOrder.includes(id))];
 

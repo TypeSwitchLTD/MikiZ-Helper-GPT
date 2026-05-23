@@ -236,7 +236,7 @@ export function useMorningBriefing({
         const utterance = new SpeechSynthesisUtterance(chunk);
         if (preferredVoice) utterance.voice = preferredVoice;
         utterance.lang = preferredVoice?.lang || 'he-IL';
-        utterance.rate = settings?.voice?.speechRate ?? 0.86;
+        utterance.rate = settings?.voice?.speechRate ?? 1.1;
         utterance.pitch = 0.98;
         utterance.volume = 1;
         utterance.onend = () => {
@@ -322,6 +322,7 @@ export function useMorningBriefing({
     setVoiceError('');
     setMorningPublishStatus('');
     setMorningPlayProgress(8);
+    setShowMorningBriefing(true);
     setIsMorningLoading(true);
     const weather = await fetchWeatherBrief(settings, todayISO);
     setMorningWeather(weather);
