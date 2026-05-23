@@ -136,40 +136,48 @@ function cleanTaskTitle(title: string): string {
     .trim();
 }
 
+const HIGH_PRIORITY_SUFFIXES = [
+  'זה ראשון — לפתוח ולהתחיל.',
+  'חשוב גם זה — אחרי הראשון.',
+  'תגיע לזה עוד היום.',
+];
+
 function getTaskLine(task: BriefingTaskLine, index: number): string {
   const title = cleanTaskTitle(task.title);
   if (task.status === 'in_progress') {
-    return `${index + 1}. ${title}. כבר התחלת, אז רק להמשיך משם.`;
+    return `${index + 1}. ${title} — כבר בפנים, המשך מאיפה שעצרת.`;
   }
   if (task.movedCount >= 2) {
-    return `${index + 1}. ${title}. זו משימה שלא דוחים שוב.`;
+    return `${index + 1}. ${title} — נדחתה כמה פעמים. הפעם לסגור.`;
   }
   if (task.priority === 'high') {
-    return `${index + 1}. ${title}. זו המשימה החשובה.`;
+    const suffix = HIGH_PRIORITY_SUFFIXES[Math.min(index, HIGH_PRIORITY_SUFFIXES.length - 1)];
+    return `${index + 1}. ${title} — ${suffix}`;
   }
-  return `${index + 1}. ${title}. לפתוח ולהתקדם צעד אחד.`;
+  return `${index + 1}. ${title} — לפתוח ולעשות צעד אחד קדימה.`;
 }
 
 function getWeatherLine(weather: WeatherBrief | null | undefined, settings: AppSettings | null): string {
   const place = weather?.cityLabel || settings?.location.label || settings?.location.city || 'אצלך';
-  const ritual = weather?.shabbatLabel && weather?.shabbatTime ? ` ${weather.shabbatLabel} היום ב${weather.shabbatTime}.` : '';
   if (weather?.morningTempC != null || weather?.noonTempC != null) {
-    const morning = weather.morningTempC != null ? `${weather.morningTempC} מעלות בבוקר` : 'אין נתון בוקר';
-    const noon = weather.noonTempC != null ? `${weather.noonTempC} בצהריים` : 'אין נתון צהריים';
-    return `ב${place} צפויות היום ${morning} ו${noon}. ${weather.description}${ritual}`.trim();
+    const morning = weather.morningTempC != null ? `${weather.morningTempC}°` : null;
+    const noon = weather.noonTempC != null ? `${weather.noonTempC}°` : null;
+    const temps = [morning && `${morning} בבוקר`, noon && `${noon} בצהריים`].filter(Boolean).join(', ');
+    const desc = weather.description ? ` ${weather.description}` : '';
+    return `${place} — ${temps}.${desc}`;
   }
-  return `מזג האוויר ב${place} עדיין לא נטען. לפני שאתה יוצא, תן בדיקה קצרה.${ritual}`;
+  return `מזג האוויר ב${place} לא נטען. תבדוק לפני שאתה יוצא.`;
 }
 
 function getMotivationLine(todayISO: string, settings: AppSettings | null): string {
   if (settings?.morningBriefing?.motivationLine?.trim()) {
-    return `משפט חיזוק להיום: ${settings.morningBriefing.motivationLine.trim()}`;
+    return settings.morningBriefing.motivationLine.trim();
   }
   const lines = [
-    'משפט חיזוק להיום: לא צריך לנצח את כל היום בבת אחת, רק את הצעד הראשון.',
-    'משפט חיזוק להיום: תנועה קטנה עכשיו שווה יותר מתכנון מושלם אחר כך.',
-    'משפט חיזוק להיום: היום מתחיל כשאתה מתחיל, לא כשהכול מסודר.',
-    'משפט חיזוק להיום: פוקוס אחד טוב יכול לשנות את כל היום.',
+    'לא צריך לנצח את כל היום בבת אחת — רק את הצעד הראשון.',
+    'תנועה קטנה עכשיו שווה יותר מתכנון מושלם אחר כך.',
+    'היום מתחיל כשאתה מתחיל, לא כשהכול מסודר.',
+    'פוקוס על דבר אחד יכול לשנות את כל היום.',
   ];
   return lines[seededIndex(todayISO, lines.length)];
 }
@@ -236,8 +244,8 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
     : ['אין שלוש משימות מוגדרות להיום. תבחר אחת ברורה ותתחיל קטן.'];
 
   const leadLine = input.leadTaskCount > 0
-    ? `מצב לידים: יש ${input.leadTaskCount} משימות לידים במערכת. לא לפתוח הכול עכשיו, רק לזכור שזה קיים.`
-    : 'מצב לידים שקט כרגע.';
+    ? `יש ${input.leadTaskCount} לידים פתוחים — לא לפתוח הכול, רק לזכור שזה מחכה.`
+    : null;
 
   const summaryLine = [
     `היום ${dayText}${hebrewDate ? `, ${hebrewDate}` : ''}.`,
@@ -251,14 +259,15 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
     motivation: { enabled: morning?.includeMotivation !== false, text: motivationLine },
     exercise: { enabled: morning?.includeExerciseReminder !== false, text: morning?.exerciseLine || 'קום, תעשה תרגיל בוקר קצר, ותכניס אנרגיה לגוף לפני המסך.' },
     topTasks: { enabled: morning?.includeTopTasks !== false, text: `המשימות שמחכות להיום:\n${taskLines.join('\n')}` },
-    leads: { enabled: morning?.includeLeads !== false, text: leadLine },
+    leads: { enabled: morning?.includeLeads !== false && leadLine !== null, text: leadLine ?? '' },
     reminders: { enabled: morning?.includeReminders !== false, text: reminderLines.join(' ') },
     closing: { enabled: morning?.includeClosing !== false, text: getClosing(input.todayISO, input.settings) },
   };
 
   const defaultOrder = ['greeting', 'weather', 'motivation', 'exercise', 'topTasks', 'leads', 'reminders', 'closing'];
-  const savedOrder = Array.isArray(morning?.sectionOrder) ? morning.sectionOrder : [];
-  const order = [...savedOrder.filter((id) => id in sectionMap), ...defaultOrder.filter((id) => !savedOrder.includes(id))];
+  const savedOrder = Array.isArray(morning?.sectionOrder) ? morning.sectionOrder.filter((id) => id !== 'greeting') : [];
+  const rest = [...savedOrder.filter((id) => id in sectionMap), ...defaultOrder.filter((id) => id !== 'greeting' && !savedOrder.includes(id))];
+  const order = ['greeting', ...rest];
 
   return order
     .map((id) => sectionMap[id])
