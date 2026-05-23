@@ -58,6 +58,7 @@ export interface UseMorningBriefingReturn {
   speakMorningBriefing: () => Promise<void>;
   stopMorningBriefing: () => void;
   openMorningBriefing: () => Promise<void>;
+  playText: (text: string) => Promise<void>;
   downloadMorningBriefing: () => void;
   publishMorningBriefingForAndroid: () => Promise<void>;
   updateCommandBlock: (index: number, patch: Partial<CommandBlock>) => void;
@@ -489,6 +490,7 @@ export function useMorningBriefing({
     speakMorningBriefing,
     stopMorningBriefing,
     openMorningBriefing,
+    playText: playTextWithEngine,
     downloadMorningBriefing,
     publishMorningBriefingForAndroid,
     updateCommandBlock,

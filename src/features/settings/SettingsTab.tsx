@@ -244,6 +244,15 @@ export type TaskGroupId = typeof TASK_GROUPS[number]['id'];
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
+export interface MorningPreviewProps {
+  text: string;
+  isSpeaking: boolean;
+  isGeneratingVoice: boolean;
+  isMorningLoading: boolean;
+  playText: (text: string) => Promise<void>;
+  stop: () => void;
+}
+
 interface SettingsTabProps {
   settings: AppSettings | null;
   isSaving: boolean;
@@ -257,6 +266,7 @@ interface SettingsTabProps {
   onImportReportTasks: (drafts: DailyReportImportTaskDraft[]) => Promise<void>;
   onDeleteLastImport?: () => Promise<{ deletedTasks: number; deletedSubtasks: number }>;
   onClearAllTasks?: () => Promise<void>;
+  morningPreview?: MorningPreviewProps;
 }
 
 // ─── Task Group Order Section ─────────────────────────────────────────────────
@@ -302,7 +312,7 @@ function TaskGroupOrderSection({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, onPullCloud, cloudSyncStatus, reports, tasks, todayISO, onImportReportTasks, onDeleteLastImport, onClearAllTasks }: SettingsTabProps) {
+export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, onPullCloud, cloudSyncStatus, reports, tasks, todayISO, onImportReportTasks, onDeleteLastImport, onClearAllTasks, morningPreview }: SettingsTabProps) {
   const [form, setForm] = useState<SettingsFormState | null>(settings ? toFormState(settings) : null);
   const [projectsText, setProjectsText] = useState(settings ? toProjectsTextarea(settings.projects) : '');
   const [domainsText, setDomainsText] = useState(settings ? toDomainsTextarea(settings.domains) : '');
@@ -593,6 +603,7 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
           form={form} updateField={updateField} settings={settings}
           orderedMorningSections={orderedMorningSections} moveMorningSection={moveMorningSection}
           voiceTestStatus={voiceTestStatus} onTestElevenLabs={() => void handleTestElevenLabs()}
+          morningPreview={morningPreview}
         />
       );
       case 'connectivity': return (

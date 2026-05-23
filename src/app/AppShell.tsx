@@ -825,6 +825,14 @@ export function AppShell() {
             onImportReportTasks={data.importReportTasks}
             onDeleteLastImport={data.deleteLastImport}
             onClearAllTasks={data.clearAllTasks}
+            morningPreview={{
+              text: morning.morningBriefingText,
+              isSpeaking: morning.isSpeaking,
+              isGeneratingVoice: morning.isGeneratingVoice,
+              isMorningLoading: morning.isMorningLoading,
+              playText: morning.playText,
+              stop: morning.stopMorningBriefing,
+            }}
           />
         );
       default:

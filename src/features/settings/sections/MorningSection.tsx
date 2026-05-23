@@ -1,7 +1,8 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { SectionCard } from '../../../components/layout/SectionCard';
 import type { SettingsFormState, UpdateFieldFn, AppSettings } from '../settingsFormTypes';
 import { useDragSort } from '../../../hooks/useDragSort';
+import type { MorningPreviewProps } from '../SettingsTab';
 
 interface MorningSectionItem {
   id: string;
@@ -17,6 +18,7 @@ interface MorningSectionProps {
   voiceTestStatus: string;
   onTestElevenLabs: () => void;
   settings: AppSettings;
+  morningPreview?: MorningPreviewProps;
 }
 
 export function MorningSection({
@@ -25,8 +27,11 @@ export function MorningSection({
   orderedMorningSections,
   voiceTestStatus,
   onTestElevenLabs,
+  morningPreview,
 }: MorningSectionProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [editText, setEditText] = useState('');
 
   const reorderSection = (from: number, to: number) => {
     const order = [...form.morningSectionOrder];
@@ -38,11 +43,60 @@ export function MorningSection({
   const { dragIdx, dragOverIdx, startTouch, endTouch, startDrag, overDrag, leaveDrag, dropDrag, endDrag } =
     useDragSort(containerRef, reorderSection);
 
+  const handlePreviewOpen = () => {
+    setEditText(morningPreview?.text ?? '');
+    setPreviewOpen(true);
+  };
+
   return (
     <SectionCard
       title="בוקר, קול והקראה"
       description="נאום, סדר הופעה, קול, מהירות, ElevenLabs וצלצול בוקר — הכל במקום אחד."
     >
+      {/* ── Preview panel ───────────────────────────── */}
+      {morningPreview && (
+        <div className="mb-4 rounded-3xl bg-sky-50 p-4 ring-1 ring-sky-100">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-sky-900">תצוגה מקדימה של הנאום</p>
+              <p className="text-xs font-bold text-sky-600">ניתן לערוך ולהקריא ישירות מכאן</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="rounded-2xl bg-sky-100 px-3 py-2 text-xs font-black text-sky-800 ring-1 ring-sky-200 transition hover:bg-sky-200"
+                onClick={handlePreviewOpen}
+              >
+                {previewOpen ? 'סגור' : 'פתח נאום'}
+              </button>
+              {previewOpen && (
+                <button
+                  type="button"
+                  className={`rounded-2xl px-3 py-2 text-xs font-black text-white transition ${morningPreview.isGeneratingVoice || morningPreview.isSpeaking || morningPreview.isMorningLoading ? 'bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                  onClick={() => {
+                    if (morningPreview.isSpeaking || morningPreview.isGeneratingVoice) {
+                      morningPreview.stop();
+                    } else {
+                      void morningPreview.playText(editText || morningPreview.text);
+                    }
+                  }}
+                >
+                  {morningPreview.isGeneratingVoice || morningPreview.isMorningLoading ? 'מכין...' : morningPreview.isSpeaking ? '■ עצור' : '▶ הקרא'}
+                </button>
+              )}
+            </div>
+          </div>
+          {previewOpen && (
+            <textarea
+              className="mt-3 w-full resize-y rounded-2xl border border-sky-200 bg-white p-3 text-sm font-bold leading-7 text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100"
+              rows={12}
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              dir="rtl"
+            />
+          )}
+        </div>
+      )}
       <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
         <div className="rounded-3xl bg-slate-50 p-4 ring-1 ring-slate-200">
           <h3 className="text-lg font-black text-slate-950">סדר נאום הבוקר</h3>
