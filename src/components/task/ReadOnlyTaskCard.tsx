@@ -68,6 +68,7 @@ interface ReadOnlyTaskCardProps {
   }) => Promise<void> | void;
   isFocused?: boolean;
   onOpenFocusTimer?: () => void;
+  isBacklogPreview?: boolean;
 }
 
 function isSubtaskStarted(subtask: Subtask): boolean {
@@ -223,6 +224,7 @@ export function ReadOnlyTaskCard({
   onAddReminder,
   isFocused = false,
   onOpenFocusTimer,
+  isBacklogPreview = false,
 }: ReadOnlyTaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
@@ -484,7 +486,9 @@ export function ReadOnlyTaskCard({
           ? "border-cyan-300 bg-cyan-50/60 ring-4 ring-cyan-100"
           : isMutedDone
             ? "border-emerald-100 bg-emerald-50/60 opacity-80"
-            : "border-slate-200 bg-white hover:border-sky-200"
+            : isBacklogPreview
+              ? "border-amber-200 bg-amber-50 hover:border-amber-300"
+              : "border-slate-200 bg-white hover:border-sky-200"
       }`}
     >
       <div

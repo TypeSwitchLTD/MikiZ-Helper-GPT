@@ -169,6 +169,7 @@ export function TodayTab({
                 onAddSubtaskToTask={onAddSubtaskToTask}
                 onAddReminder={onAddReminder}
                 isFocused={focusedTaskId === task.id}
+                isBacklogPreview
               />
             ))}
           </div>
