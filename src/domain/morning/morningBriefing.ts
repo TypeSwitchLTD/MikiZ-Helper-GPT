@@ -233,7 +233,7 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
   const reminderLines = getReminderLines(input);
   const taskLines = topTasks.length
     ? topTasks.map((task, index) => getTaskLine(task, index))
-    : ['אין לך שלוש משימות מוגדרות להיום. זה סימן טוב לבחור אחת ברורה ולהתחיל קטן.'];
+    : ['אין שלוש משימות מוגדרות להיום. תבחר אחת ברורה ותתחיל קטן.'];
 
   const leadLine = input.leadTaskCount > 0
     ? `מצב לידים: יש ${input.leadTaskCount} משימות לידים במערכת. לא לפתוח הכול עכשיו, רק לזכור שזה קיים.`

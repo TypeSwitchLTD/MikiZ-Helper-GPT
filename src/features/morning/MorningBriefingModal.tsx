@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react';
 import type { UseMorningBriefingReturn } from './useMorningBriefing';
 
 interface MorningBriefingModalProps
   extends Pick<
     UseMorningBriefingReturn,
     | 'morningBriefingText'
+    | 'setMorningBriefingTextOverride'
     | 'isMorningLoading'
     | 'isGeneratingVoice'
     | 'isSpeaking'
@@ -23,6 +25,7 @@ interface MorningBriefingModalProps
 
 export function MorningBriefingModal({
   morningBriefingText,
+  setMorningBriefingTextOverride,
   isMorningLoading,
   isGeneratingVoice,
   isSpeaking,
@@ -38,6 +41,17 @@ export function MorningBriefingModal({
   publishMorningBriefingForAndroid,
   onClose,
 }: MorningBriefingModalProps) {
+  const [editText, setEditText] = useState(morningBriefingText);
+
+  useEffect(() => {
+    setEditText(morningBriefingText);
+  }, [morningBriefingText]);
+
+  const handleTextChange = (value: string) => {
+    setEditText(value);
+    setMorningBriefingTextOverride(value);
+  };
+
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
@@ -117,9 +131,16 @@ export function MorningBriefingModal({
           {isMorningLoading ? (
             <p className="text-base font-black text-sky-700">טוען מזג אוויר ומכין נאום בוקר...</p>
           ) : (
-            <pre className="whitespace-pre-wrap text-lg font-bold leading-9 text-slate-800">
-              {morningBriefingText}
-            </pre>
+            <>
+              <p className="mb-2 text-xs font-black text-slate-400">ניתן לערוך את הנאום לפני ההקראה</p>
+              <textarea
+                className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 p-3 text-base font-bold leading-8 text-slate-800 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100"
+                rows={14}
+                value={editText}
+                onChange={(e) => handleTextChange(e.target.value)}
+                dir="rtl"
+              />
+            </>
           )}
         </div>
 

@@ -1457,6 +1457,7 @@ export function AppShell() {
       {morning.showMorningBriefing ? (
         <MorningBriefingModal
           morningBriefingText={morning.morningBriefingText}
+          setMorningBriefingTextOverride={morning.setMorningBriefingTextOverride}
           isMorningLoading={morning.isMorningLoading}
           isGeneratingVoice={morning.isGeneratingVoice}
           isSpeaking={morning.isSpeaking}
