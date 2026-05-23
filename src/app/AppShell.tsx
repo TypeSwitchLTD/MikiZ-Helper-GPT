@@ -1069,7 +1069,7 @@ export function AppShell() {
         </aside>
 
         {/* Main content */}
-        <section ref={mainSectionRef} className="mission-scroll min-w-0 px-3 py-4 sm:px-5 lg:px-8 xl:h-screen xl:overflow-y-auto">
+        <section ref={mainSectionRef} className="mission-scroll min-w-0 px-3 pb-4 pt-0 sm:px-5 lg:px-8 xl:h-screen xl:overflow-y-auto">
           <header
             className={`sticky top-0 z-30 -mx-3 mb-4 border-b px-3 backdrop-blur-xl transition-[padding] duration-200 sm:-mx-5 sm:px-5 lg:-mx-8 lg:px-8 ${scrollCompact ? "py-1.5" : "py-2"} ${theme.headerBg} ${theme.headerBorder}`}
           >
