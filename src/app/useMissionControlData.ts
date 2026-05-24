@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getAllLocalData, importDailyStatePayload, initializeLocalDatabase } from '../db/localData';
+import { getAllLocalData, importDailyStatePayload, initializeLocalDatabase, rolloverStaleTodayTasks } from '../db/localData';
 import { hasCloudSyncToken, pullCloudSyncPayload, pushCloudSyncPayload, type CloudSyncPayload } from '../domain/cloud/cloudSync';
 import { db } from '../db/db';
 import type { DailyPlan, DailyPlanBlock } from '../domain/dailyPlans/dailyPlanTypes';
@@ -229,6 +229,12 @@ export function useMissionControlData() {
       try {
         setIsLoading(true);
         await initializeLocalDatabase();
+        // Roll-over stale "today" tasks once per day
+        const ROLLOVER_KEY = `mc-rollover:${getTodayISO()}`;
+        if (typeof window !== 'undefined' && !sessionStorage.getItem(ROLLOVER_KEY)) {
+          await rolloverStaleTodayTasks();
+          sessionStorage.setItem(ROLLOVER_KEY, 'done');
+        }
         let localData = await getAllLocalData();
 
         const urlToken = getCloudTokenFromUrl();

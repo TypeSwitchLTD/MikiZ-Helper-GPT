@@ -11,7 +11,7 @@ import { createDefaultSettings } from '../domain/settings/defaultSettings';
 import { createSeedData } from './seed';
 import { APP_VERSION, DATABASE_NAME, type BackupSnapshot } from './schema';
 import { createId } from '../utils/ids';
-import { nowISO } from '../utils/dates';
+import { nowISO, getTodayISO } from '../utils/dates';
 
 export class MissionControlDatabase extends Dexie {
   tasks!: Table<Task, string>;
@@ -340,7 +340,19 @@ export async function importDailyStatePayload(payload: DailyStateImportPayload):
       });
 
       if (settings) await db.settings.put(settings);
-      if (tasks.length) await db.tasks.bulkPut(tasks);
+
+      // ── Smart merge for tasks: local changes (cancel/edit) win if newer than cloud ──
+      if (tasks.length) {
+        const existingTasks = await db.tasks.bulkGet(tasks.map((t) => t.id));
+        const toUpsert = tasks.filter((cloudTask, i) => {
+          const local = existingTasks[i];
+          if (!local) return true; // new task → add
+          // Local has a more recent change (e.g. cancellation) → keep local, skip cloud version
+          return cloudTask.updatedAt >= local.updatedAt;
+        });
+        if (toUpsert.length) await db.tasks.bulkPut(toUpsert);
+      }
+
       if (subtasks.length) await db.subtasks.bulkPut(subtasks);
       if (dailyPlans.length) await db.dailyPlans.bulkPut(dailyPlans);
       if (recurringDefinitions.length) await db.recurringDefinitions.bulkPut(recurringDefinitions);
@@ -361,4 +373,38 @@ export async function importDailyStatePayload(payload: DailyStateImportPayload):
   );
 
   return { tasks: tasks.length, subtasks: subtasks.length, importedAt };
+}
+
+/**
+ * Roll-over stale "today" tasks to the actual today.
+ * Called once per session at startup.
+ * Tasks that were in bucket=today on a previous day and are still open
+ * get their date updated to today — so they appear in today's view.
+ */
+export async function rolloverStaleTodayTasks(): Promise<number> {
+  const todayISO = getTodayISO();
+  const staleTasks = await db.tasks
+    .where('bucket').equals('today')
+    .filter(
+      (task) =>
+        (task.date ?? '') < todayISO &&
+        !task.completedAt &&
+        task.statusOverride !== 'cancelled',
+    )
+    .toArray();
+
+  if (staleTasks.length === 0) return 0;
+
+  const timestamp = nowISO();
+  await db.tasks.bulkPut(
+    staleTasks.map((task) => ({
+      ...task,
+      date: todayISO,
+      movedCount: task.movedCount + 1,
+      updatedAt: timestamp,
+    })),
+  );
+
+  console.log(`[Rollover] Moved ${staleTasks.length} stale today-tasks → ${todayISO}`);
+  return staleTasks.length;
 }
