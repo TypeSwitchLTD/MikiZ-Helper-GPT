@@ -24,10 +24,12 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.7.9";
+const APP_VERSION = "0.8.0";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
+const AUTH_OK_KEY = "mission-control-auth-ok";
+const AUTH_PIN_VERSION_KEY = "mission-control-auth-pin-version";
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -41,6 +43,11 @@ function readLockout(): LockoutState {
 }
 function writeLockout(s: LockoutState) {
   localStorage.setItem(LOCKOUT_KEY, JSON.stringify(s));
+}
+
+function getAuthPinVersion(settings: AppSettings | null | undefined): string {
+  if (!settings?.pinEnabled) return "disabled";
+  return settings.pinUpdatedAt || settings.pinHash || "enabled-without-pin-hash";
 }
 
 // ─── Color theme config ───────────────────────────────────────────────────────
@@ -305,15 +312,14 @@ export function AppShell() {
   const [pinShake, setPinShake] = useState(false);
   const [authLockout, setAuthLockout] = useState<LockoutState>(readLockout);
   const [lockCountdown, setLockCountdown] = useState(0);
-  const [isPinAuthenticated, setIsPinAuthenticated] = useState(
-    () => sessionStorage.getItem("mission-control-auth-ok") === "true",
-  );
+  const [isPinAuthenticated, setIsPinAuthenticated] = useState(false);
   const [dailyStateImportStatus, setDailyStateImportStatus] = useState("");
   const dailyStateInputRef = useRef<HTMLInputElement | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [scrollCompact, setScrollCompact] = useState(false);
   const [desktopSearchOpen, setDesktopSearchOpen] = useState(false);
+  const [hasAutoOpenedReadiness, setHasAutoOpenedReadiness] = useState(false);
   const mainSectionRef = useRef<HTMLElement>(null);
 
   const data = useMissionControlData();
@@ -391,15 +397,24 @@ export function AppShell() {
   // which would grant access immediately, bypassing auth on every new device.
   useEffect(() => {
     if (data.isLoading) return; // don't decide until real settings are loaded
+    const pinVersion = getAuthPinVersion(data.settings);
     if (!data.settings?.pinEnabled) {
-      sessionStorage.setItem("mission-control-auth-ok", "true");
+      sessionStorage.setItem(AUTH_OK_KEY, "true");
+      sessionStorage.setItem(AUTH_PIN_VERSION_KEY, pinVersion);
       setIsPinAuthenticated(true);
     } else {
-      // PIN is enabled — only allow through if this session was explicitly authenticated
-      const sessionOk = sessionStorage.getItem("mission-control-auth-ok") === "true";
-      if (!sessionOk) setIsPinAuthenticated(false);
+      // PIN is enabled - only allow through if this session matches the current PIN version.
+      const sessionOk = sessionStorage.getItem(AUTH_OK_KEY) === "true";
+      const sessionVersionOk = sessionStorage.getItem(AUTH_PIN_VERSION_KEY) === pinVersion;
+      if (sessionOk && sessionVersionOk) {
+        setIsPinAuthenticated(true);
+      } else {
+        sessionStorage.removeItem(AUTH_OK_KEY);
+        sessionStorage.removeItem(AUTH_PIN_VERSION_KEY);
+        setIsPinAuthenticated(false);
+      }
     }
-  }, [data.settings?.pinEnabled, data.isLoading]);
+  }, [data.settings?.pinEnabled, data.settings?.pinHash, data.settings?.pinUpdatedAt, data.isLoading]);
 
   // ─── Lockout countdown timer ──────────────────────────────────────────────────
   useEffect(() => {
@@ -425,6 +440,10 @@ export function AppShell() {
       setAuthPin("");
       return;
     }
+    if (!/^\d{6}$/.test(nextPin)) {
+      setAuthError("הכנס קוד בן 6 ספרות כדי להמשיך.");
+      return;
+    }
     setAuthError("");
     if (!data.settings?.pinHash) {
       setAuthError("PIN פעיל אבל לא הוגדר קוד. כבה/הגדר אותו בהגדרות המקומיות.");
@@ -436,7 +455,8 @@ export function AppShell() {
       const cleared: LockoutState = { attempts: 0, lockedUntil: null };
       setAuthLockout(cleared);
       writeLockout(cleared);
-      sessionStorage.setItem("mission-control-auth-ok", "true");
+      sessionStorage.setItem(AUTH_OK_KEY, "true");
+      sessionStorage.setItem(AUTH_PIN_VERSION_KEY, getAuthPinVersion(data.settings));
       setIsPinAuthenticated(true);
       setAuthPin("");
       return;
@@ -468,7 +488,8 @@ export function AppShell() {
     const ok = await verifyBiometric(credId);
     setIsBiometricLoading(false);
     if (ok) {
-      sessionStorage.setItem("mission-control-auth-ok", "true");
+      sessionStorage.setItem(AUTH_OK_KEY, "true");
+      sessionStorage.setItem(AUTH_PIN_VERSION_KEY, getAuthPinVersion(data.settings));
       setIsPinAuthenticated(true);
     } else {
       setAuthError("זיהוי ביומטרי נכשל — הכנס PIN.");
@@ -498,11 +519,17 @@ export function AppShell() {
   // ─── Morning readiness auto-open ──────────────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined" || !data.todayISO) return;
-    const key = `mission-control-morning-readiness-seen:${data.todayISO}:${APP_VERSION}`;
-    if (window.localStorage.getItem(key) === "true") return;
-    window.localStorage.setItem(key, "true");
-    setReadyCheckOpen(true);
-  }, [data.todayISO]);
+    if (data.isLoading) return;
+    if (data.settings?.pinEnabled && !isPinAuthenticated) return;
+    if (hasAutoOpenedReadiness) return;
+
+    const timerId = window.setTimeout(() => {
+      setHasAutoOpenedReadiness(true);
+      setReadyCheckOpen(true);
+    }, 250);
+
+    return () => window.clearTimeout(timerId);
+  }, [data.todayISO, data.isLoading, data.settings?.pinEnabled, isPinAuthenticated, hasAutoOpenedReadiness]);
 
   // ─── Command center: re-init blocks when opened ───────────────────────────────
   useEffect(() => {
@@ -1002,17 +1029,41 @@ export function AppShell() {
 
               <input
                 autoFocus
+                type="tel"
                 autoComplete="one-time-code"
+                enterKeyHint="done"
                 inputMode="numeric"
                 pattern="[0-9]*"
                 maxLength={6}
                 value={authPin}
                 onChange={(e) => handleAuthPinChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void submitAuthPin(authPin);
+                }}
                 className="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-2xl font-black tracking-[0.45em] outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                 aria-label="קוד כניסה"
               />
 
               {/* ── Error / attempts feedback ── */}
+              <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+                <button
+                  type="button"
+                  disabled={authPin.length !== 6}
+                  onClick={() => void submitAuthPin(authPin)}
+                  className="min-h-12 rounded-2xl bg-slate-950 px-4 text-base font-black text-white transition active:scale-[0.99] disabled:bg-slate-200 disabled:text-slate-400"
+                >
+                  כניסה
+                </button>
+                <button
+                  type="button"
+                  disabled={!authPin}
+                  onClick={() => { setAuthPin(""); setAuthError(""); }}
+                  className="min-h-12 rounded-2xl bg-white px-4 text-sm font-black text-slate-600 ring-1 ring-slate-200 transition active:scale-[0.99] disabled:opacity-40"
+                >
+                  נקה
+                </button>
+              </div>
+
               {authError ? (
                 <p className="mt-4 rounded-2xl bg-rose-50 px-4 py-2 text-sm font-black text-rose-700 ring-1 ring-rose-100">
                   {authError}
@@ -1023,7 +1074,7 @@ export function AppShell() {
                 </p>
               ) : null}
 
-              <p className="mt-4 text-xs font-bold text-slate-400">כניסה אוטומטית אחרי 6 ספרות, בלי Enter.</p>
+              <p className="mt-4 text-xs font-bold text-slate-400">אפשר להכניס 6 ספרות או ללחוץ כניסה ידנית.</p>
             </>
           )}
         </section>
@@ -1563,7 +1614,7 @@ export function AppShell() {
             : "bg-gradient-to-l from-emerald-500 to-cyan-500"
         }`}
         title="נאום בוקר"
-        onClick={() => void morning.speakMorningBriefing()}
+        onClick={() => void morning.openMorningBriefing()}
       >
         <span className="text-base">
           {morning.isGeneratingVoice || morning.isMorningLoading ? `${morning.morningPlayProgress}%` : morning.isSpeaking ? "■" : "▶"}
@@ -1675,8 +1726,14 @@ export function AppShell() {
           voiceStatus={morning.voiceStatus}
           cloudSyncStatus={data.cloudSyncStatus}
           locationLabel={data.settings?.location.label ?? ""}
-          onSpeakMorningBriefing={() => void morning.speakMorningBriefing()}
-          onOpenFocusTimer={() => setFocusTimerOpen(true)}
+          onSpeakMorningBriefing={() => {
+            setReadyCheckOpen(false);
+            void morning.openMorningBriefing();
+          }}
+          onOpenFocusTimer={() => {
+            setReadyCheckOpen(false);
+            setFocusTimerOpen(true);
+          }}
           onClose={() => setReadyCheckOpen(false)}
         />
       ) : null}
