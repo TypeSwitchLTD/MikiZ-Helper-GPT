@@ -258,25 +258,88 @@ export async function deleteLastDailyReportImport(): Promise<{ deletedTasks: num
   }
   let deletedSubtasks = 0;
   await db.transaction('rw', db.tasks, db.subtasks, db.logs, async () => {
+    const timestamp = nowISO();
     for (const taskId of taskIds) {
       const taskSubtasks = await db.subtasks.where('taskId').equals(taskId).toArray();
-      await db.subtasks.bulkDelete(taskSubtasks.map((subtask) => subtask.id));
+      await db.subtasks.bulkPut(taskSubtasks.map((subtask) => ({
+        ...subtask,
+        deletedAt: subtask.deletedAt ?? timestamp,
+        updatedAt: timestamp,
+      })));
       deletedSubtasks += taskSubtasks.length;
     }
     if (mergedSubtaskIds.length > 0) {
-      await db.subtasks.bulkDelete(mergedSubtaskIds);
+      const mergedSubtasks = (await db.subtasks.bulkGet(mergedSubtaskIds)).filter(
+        (subtask): subtask is Subtask => Boolean(subtask),
+      );
+      await db.subtasks.bulkPut(mergedSubtasks.map((subtask) => ({
+        ...subtask,
+        deletedAt: subtask.deletedAt ?? timestamp,
+        updatedAt: timestamp,
+      })));
       deletedSubtasks += mergedSubtaskIds.length;
     }
-    if (taskIds.length > 0) await db.tasks.bulkDelete(taskIds);
+    if (taskIds.length > 0) {
+      const importedTasks = (await db.tasks.bulkGet(taskIds)).filter(
+        (task): task is Task => Boolean(task),
+      );
+      await db.tasks.bulkPut(importedTasks.map((task) => ({
+        ...task,
+        deletedAt: task.deletedAt ?? timestamp,
+        updatedAt: timestamp,
+      })));
+    }
     await createLogEvent({
       type: 'task_cancelled',
       entityType: 'system',
       entityId: null,
-      message: `Deleted last daily report import: ${taskIds.length} tasks, ${deletedSubtasks} subtasks`,
+      message: `Soft-deleted last daily report import: ${taskIds.length} tasks, ${deletedSubtasks} subtasks`,
       metadata: { source: 'daily_report_import_rollback', taskIds, mergedSubtaskIds },
     });
   });
   return { deletedTasks: taskIds.length, deletedSubtasks };
+}
+
+export async function softDeleteAllTasks(): Promise<{ deletedTasks: number; deletedSubtasks: number }> {
+  const timestamp = nowISO();
+  let deletedTasks = 0;
+  let deletedSubtasks = 0;
+
+  await db.transaction('rw', db.tasks, db.subtasks, db.logs, async () => {
+    const tasks = await db.tasks.toArray();
+    const subtasks = await db.subtasks.toArray();
+    const activeTasks = tasks.filter((task) => !task.deletedAt);
+    const activeSubtasks = subtasks.filter((subtask) => !subtask.deletedAt);
+
+    deletedTasks = activeTasks.length;
+    deletedSubtasks = activeSubtasks.length;
+
+    if (activeTasks.length > 0) {
+      await db.tasks.bulkPut(activeTasks.map((task) => ({
+        ...task,
+        deletedAt: timestamp,
+        updatedAt: timestamp,
+      })));
+    }
+
+    if (activeSubtasks.length > 0) {
+      await db.subtasks.bulkPut(activeSubtasks.map((subtask) => ({
+        ...subtask,
+        deletedAt: timestamp,
+        updatedAt: timestamp,
+      })));
+    }
+
+    await createLogEvent({
+      type: 'task_cancelled',
+      entityType: 'system',
+      entityId: null,
+      message: `Soft-deleted all tasks: ${deletedTasks} tasks, ${deletedSubtasks} subtasks`,
+      metadata: { source: 'clear_all_tasks', deletedTasks, deletedSubtasks },
+    });
+  });
+
+  return { deletedTasks, deletedSubtasks };
 }
 
 export async function updateTask(taskId: string, patch: Partial<Task>): Promise<void> {
@@ -380,7 +443,7 @@ export async function updateSubtaskStatus(subtaskId: string, status: SubtaskStat
     const updatedSubtasks = taskSubtasks.map((subtask) =>
       subtask.id === subtaskId ? { ...subtask, ...patch } : subtask,
     );
-    const activeSubtasks = updatedSubtasks.filter((subtask) => subtask.status !== 'cancelled');
+    const activeSubtasks = updatedSubtasks.filter((subtask) => !subtask.deletedAt && subtask.status !== 'cancelled');
     const allActiveDone = activeSubtasks.length > 0 && activeSubtasks.every((subtask) => subtask.status === 'done');
 
     await db.tasks.update(currentSubtask.taskId, {
@@ -502,7 +565,7 @@ export async function reorderTodayTaskFocus(taskId: string, action: FocusOrderAc
 
   await db.transaction('rw', db.tasks, db.logs, async () => {
     const tasks = (await db.tasks.toArray())
-      .filter((task) => task.statusOverride !== 'cancelled' && task.bucket === 'today' && task.date === todayISO)
+      .filter((task) => !task.deletedAt && task.statusOverride !== 'cancelled' && task.bucket === 'today' && task.date === todayISO)
       .sort(compareTasksForFocus);
 
     const currentIndex = tasks.findIndex((task) => task.id === taskId);
@@ -551,7 +614,7 @@ export async function addRecurringDefinitionToToday(definitionId: string): Promi
     const existingTask = await db.tasks
       .where('date')
       .equals(today)
-      .filter((task) => task.recurrenceDefinitionId === definition.id && task.statusOverride !== 'cancelled')
+      .filter((task) => !task.deletedAt && task.recurrenceDefinitionId === definition.id && task.statusOverride !== 'cancelled')
       .first();
 
     if (existingTask) {

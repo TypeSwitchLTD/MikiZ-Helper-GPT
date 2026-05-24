@@ -37,6 +37,7 @@ export interface Task {
   updatedAt: string;
   completedAt?: string | null;
   cancelledAt?: string | null;
+  deletedAt?: string | null;
 }
 
 export type SubtaskStatus = 'not_started' | 'started' | 'done' | 'cancelled';
@@ -54,6 +55,7 @@ export interface Subtask {
   startedAt?: string | null;
   completedAt?: string | null;
   cancelledAt?: string | null;
+  deletedAt?: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;

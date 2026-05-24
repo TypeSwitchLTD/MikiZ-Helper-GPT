@@ -18,6 +18,7 @@ import {
   addRecurringDefinitionToToday,
   addSubtaskToTask,
   cancelTask,
+  softDeleteAllTasks,
   importDailyReportTasks,
   deleteLastDailyReportImport,
   createTaskWithSubtasks,
@@ -141,7 +142,7 @@ export function useMissionControlData() {
 
   const pushLocalDataToCloud = useCallback(async () => {
     await initializeLocalDatabase();
-    const localData = await getAllLocalData();
+    const localData = await getAllLocalData({ includeDeleted: true });
     const payload = buildCloudSyncPayload(localData);
     if (!payload || !hasCloudSyncToken(localData.settings)) {
       const message = 'Cloud sync לא הופעל: חסר Token בהגדרות Android Morning.';
@@ -209,7 +210,7 @@ export function useMissionControlData() {
   const reloadDataAndPushCloud = useCallback(async () => {
     await reloadData();
     try {
-      const localData = await getAllLocalData();
+      const localData = await getAllLocalData({ includeDeleted: true });
       if (hasCloudSyncToken(localData.settings)) {
         const payload = buildCloudSyncPayload(localData);
         if (payload) {
@@ -657,8 +658,7 @@ export function useMissionControlData() {
   const clearAllTasks = useCallback(async () => {
     try {
       setIsSaving(true);
-      await db.tasks.clear();
-      await db.subtasks.clear();
+      await softDeleteAllTasks();
       await reloadDataAndPushCloud();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'שגיאה במחיקת משימות');

@@ -9,6 +9,10 @@ export interface TaskProgress {
 }
 
 export function getTaskProgress(task: Task, subtasks: Subtask[]): TaskProgress {
+  if (task.deletedAt) {
+    return { status: 'cancelled', percent: 0, startedCount: 0, doneCount: 0, totalCount: 0 };
+  }
+
   if (task.statusOverride === 'cancelled') {
     return { status: 'cancelled', percent: 0, startedCount: 0, doneCount: 0, totalCount: 0 };
   }
@@ -17,7 +21,7 @@ export function getTaskProgress(task: Task, subtasks: Subtask[]): TaskProgress {
     return { status: 'moved', percent: 0, startedCount: 0, doneCount: 0, totalCount: 0 };
   }
 
-  const taskSubtasks = subtasks.filter((subtask) => subtask.taskId === task.id);
+  const taskSubtasks = subtasks.filter((subtask) => subtask.taskId === task.id && !subtask.deletedAt);
   const activeSubtasks = taskSubtasks.filter((subtask) => subtask.status !== 'cancelled');
   const startedSubtasks = activeSubtasks.filter(
     (subtask) => subtask.status === 'started' || subtask.status === 'done',

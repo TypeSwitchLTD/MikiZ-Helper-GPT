@@ -249,7 +249,11 @@ async function seedDatabaseIfNeeded(): Promise<void> {
   );
 }
 
-export async function getAllLocalData() {
+interface GetAllLocalDataOptions {
+  includeDeleted?: boolean;
+}
+
+export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
   const [rawTasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs] = await Promise.all([
     db.tasks.orderBy('createdAt').toArray(),
     db.subtasks.orderBy('sortOrder').toArray(),
@@ -263,11 +267,16 @@ export async function getAllLocalData() {
     db.habitLogs.orderBy('date').toArray(),
   ]);
 
-  const tasks = rawTasks.map(normalizeTask);
+  const allTasks = rawTasks.map(normalizeTask);
+  const tasks = options.includeDeleted ? allTasks : allTasks.filter((task) => !task.deletedAt);
+  const visibleTaskIds = new Set(tasks.map((task) => task.id));
+  const visibleSubtasks = options.includeDeleted
+    ? subtasks
+    : subtasks.filter((subtask) => !subtask.deletedAt && visibleTaskIds.has(subtask.taskId));
 
   return {
     tasks,
-    subtasks,
+    subtasks: visibleSubtasks,
     dailyPlans,
     recurringDefinitions,
     reports,
@@ -348,6 +357,10 @@ export async function importDailyStatePayload(payload: DailyStateImportPayload):
           const local = existingTasks[i];
           if (!local) return true; // new task → add it
 
+          // Rule 0: Deletion tombstones are sticky across devices.
+          if (cloudTask.deletedAt) return !local.deletedAt || cloudTask.updatedAt > local.updatedAt;
+          if (local.deletedAt && !cloudTask.deletedAt) return false;
+
           // Rule 1: A locally cancelled task can NEVER be resurrected by a cloud import.
           // This is the main cause of "127 ghost tasks" — old JSON has the task without
           // cancellation, and it overwrites the local cancelled state.
@@ -365,9 +378,38 @@ export async function importDailyStatePayload(payload: DailyStateImportPayload):
           return cloudTask.updatedAt > local.updatedAt;
         });
         if (toUpsert.length) await db.tasks.bulkPut(toUpsert);
+
+        const deletedTaskIds = tasks.filter((task) => task.deletedAt).map((task) => task.id);
+        if (deletedTaskIds.length > 0) {
+          const localSubtasks = await db.subtasks
+            .filter((subtask) => deletedTaskIds.includes(subtask.taskId) && !subtask.deletedAt)
+            .toArray();
+          if (localSubtasks.length > 0) {
+            await db.subtasks.bulkPut(localSubtasks.map((subtask) => ({
+              ...subtask,
+              deletedAt: importedAt,
+              updatedAt: importedAt,
+            })));
+          }
+        }
       }
 
-      if (subtasks.length) await db.subtasks.bulkPut(subtasks);
+      if (subtasks.length) {
+        const existingSubtasks = await db.subtasks.bulkGet(subtasks.map((s) => s.id));
+        const localParentTasks = await db.tasks.bulkGet(subtasks.map((s) => s.taskId));
+        const toUpsert = subtasks.filter((cloudSubtask, i) => {
+          const local = existingSubtasks[i];
+          const localParentTask = localParentTasks[i];
+          if (localParentTask?.deletedAt && !cloudSubtask.deletedAt) return false;
+          if (!local) return true;
+          if (cloudSubtask.deletedAt) return !local.deletedAt || cloudSubtask.updatedAt > local.updatedAt;
+          if (local.deletedAt && !cloudSubtask.deletedAt) return false;
+          if (local.status === 'cancelled' && cloudSubtask.status !== 'cancelled') return false;
+          if (local.status === 'done' && cloudSubtask.status !== 'done') return false;
+          return cloudSubtask.updatedAt > local.updatedAt;
+        });
+        if (toUpsert.length) await db.subtasks.bulkPut(toUpsert);
+      }
       if (dailyPlans.length) await db.dailyPlans.bulkPut(dailyPlans);
       if (recurringDefinitions.length) await db.recurringDefinitions.bulkPut(recurringDefinitions);
       if (reports.length) await db.reports.bulkPut(reports);
@@ -403,6 +445,7 @@ export async function rolloverStaleTodayTasks(): Promise<number> {
       (task) =>
         (task.date ?? '') < todayISO &&
         !task.completedAt &&
+        !task.deletedAt &&
         task.statusOverride !== 'cancelled',
     )
     .toArray();
