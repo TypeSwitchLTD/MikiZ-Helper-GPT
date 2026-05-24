@@ -385,14 +385,20 @@ export function AppShell() {
   }, []);
 
   // ─── Auth ─────────────────────────────────────────────────────────────────────
+  // IMPORTANT: wait for data to finish loading before evaluating PIN.
+  // On first render data.settings is null → pinEnabled is undefined → !undefined = true
+  // which would grant access immediately, bypassing auth on every new device.
   useEffect(() => {
+    if (data.isLoading) return; // don't decide until real settings are loaded
     if (!data.settings?.pinEnabled) {
       sessionStorage.setItem("mission-control-auth-ok", "true");
       setIsPinAuthenticated(true);
-    } else if (sessionStorage.getItem("mission-control-auth-ok") !== "true") {
-      setIsPinAuthenticated(false);
+    } else {
+      // PIN is enabled — only allow through if this session was explicitly authenticated
+      const sessionOk = sessionStorage.getItem("mission-control-auth-ok") === "true";
+      if (!sessionOk) setIsPinAuthenticated(false);
     }
-  }, [data.settings?.pinEnabled]);
+  }, [data.settings?.pinEnabled, data.isLoading]);
 
   // ─── Lockout countdown timer ──────────────────────────────────────────────────
   useEffect(() => {

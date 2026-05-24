@@ -256,6 +256,7 @@ export function useMissionControlData() {
               if (cloudResult.ok && cloudResult.payload && cloudResult.payload.settings) {
                 const mergedBootstrap = mergeCloudWithLocalTokens(cloudResult.payload, localData.settings);
                 await importDailyStatePayload(mergedBootstrap);
+                await rolloverStaleTodayTasks(); // move any stale today-tasks to today after bootstrap
                 localData = await getAllLocalData();
                 setCloudSyncStatus(`נטען מהענן למכשיר חדש: ${cloudResult.counts?.tasks ?? localData.tasks.length} משימות`);
               } else {
@@ -267,16 +268,23 @@ export function useMissionControlData() {
           }
           removeCloudBootstrapParamsFromUrl();
         } else if (!urlToken && hasCloudSyncToken(localData.settings)) {
-          // ── Auto-sync: device already has a token — pull once per session ──
-          const SESSION_KEY = 'mc-session-pulled';
-          const alreadyPulledThisSession = sessionStorage.getItem(SESSION_KEY) === 'true';
-          if (!alreadyPulledThisSession) {
-            sessionStorage.setItem(SESSION_KEY, 'true');
+          // ── Auto-sync: pull from cloud on every startup, throttled to 3 minutes ──
+          // Using localStorage (not sessionStorage) so the throttle persists across
+          // page reloads, but a fresh pull still happens after 3 minutes of inactivity.
+          const LAST_PULL_KEY = 'mc-last-cloud-pull';
+          const PULL_THROTTLE_MS = 3 * 60 * 1000; // 3 minutes
+          const lastPull = Number(localStorage.getItem(LAST_PULL_KEY) || '0');
+          const shouldPull = Date.now() - lastPull > PULL_THROTTLE_MS;
+
+          if (shouldPull) {
+            localStorage.setItem(LAST_PULL_KEY, String(Date.now()));
             try {
               const cloudResult = await pullCloudSyncPayload(localData.settings);
               if (cloudResult.ok && cloudResult.payload && cloudResult.payload.settings) {
                 const mergedAuto = mergeCloudWithLocalTokens(cloudResult.payload, localData.settings);
                 await importDailyStatePayload(mergedAuto);
+                // After cloud pull, roll over stale today-tasks immediately
+                await rolloverStaleTodayTasks();
                 localData = await getAllLocalData();
                 setCloudSyncStatus(`סונכרן מהענן: ${cloudResult.counts?.tasks ?? localData.tasks.length} משימות`);
               }

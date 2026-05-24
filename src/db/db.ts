@@ -341,14 +341,28 @@ export async function importDailyStatePayload(payload: DailyStateImportPayload):
 
       if (settings) await db.settings.put(settings);
 
-      // ── Smart merge for tasks: local changes (cancel/edit) win if newer than cloud ──
+      // ── Smart merge for tasks: local cancellations/completions always survive ──
       if (tasks.length) {
         const existingTasks = await db.tasks.bulkGet(tasks.map((t) => t.id));
         const toUpsert = tasks.filter((cloudTask, i) => {
           const local = existingTasks[i];
-          if (!local) return true; // new task → add
-          // Local has a more recent change (e.g. cancellation) → keep local, skip cloud version
-          return cloudTask.updatedAt >= local.updatedAt;
+          if (!local) return true; // new task → add it
+
+          // Rule 1: A locally cancelled task can NEVER be resurrected by a cloud import.
+          // This is the main cause of "127 ghost tasks" — old JSON has the task without
+          // cancellation, and it overwrites the local cancelled state.
+          if (local.statusOverride === 'cancelled' && cloudTask.statusOverride !== 'cancelled') {
+            return false; // keep local: cancelled stays cancelled
+          }
+
+          // Rule 2: A locally completed task is also protected.
+          if (local.completedAt && !cloudTask.completedAt) {
+            return false; // keep local: completed stays completed
+          }
+
+          // Rule 3: Otherwise last-write-wins by updatedAt.
+          // Use strict > so equal timestamps keep local (avoids re-importing unchanged data).
+          return cloudTask.updatedAt > local.updatedAt;
         });
         if (toUpsert.length) await db.tasks.bulkPut(toUpsert);
       }
