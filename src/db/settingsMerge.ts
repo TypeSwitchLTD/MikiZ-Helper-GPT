@@ -22,7 +22,7 @@ export function mergeImportedSettingsPreservingLocalSecrets(
     pinEnabled: local.pinEnabled,
     pinHash: keepLocalNullableString(local.pinHash, incoming.pinHash) ?? null,
     pinUpdatedAt: keepLocalNullableString(local.pinUpdatedAt, incoming.pinUpdatedAt) ?? null,
-    passkeyCredentialId: keepLocalNullableString(local.passkeyCredentialId, incoming.passkeyCredentialId) ?? null,
+    passkeyCredentialId: null,
     morningBriefing: {
       ...incoming.morningBriefing,
       androidPublishToken: keepLocalString(

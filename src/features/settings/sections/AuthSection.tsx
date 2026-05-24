@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { SectionCard } from '../../../components/layout/SectionCard';
 import type { SettingsFormState, UpdateFieldFn } from '../settingsFormTypes';
-import { isBiometricSupported, registerBiometric } from '../../auth/useBiometricAuth';
+import {
+  clearLocalBiometricCredentialId,
+  getLocalBiometricCredentialId,
+  isBiometricSupported,
+  registerBiometric,
+} from '../../auth/useBiometricAuth';
 
 interface AuthSectionProps {
   form: SettingsFormState;
@@ -12,6 +17,7 @@ interface AuthSectionProps {
 export function AuthSection({ form, updateField, hasPinHash }: AuthSectionProps) {
   const [biometricStatus, setBiometricStatus] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  const [localCredentialId, setLocalCredentialId] = useState(() => getLocalBiometricCredentialId());
 
   const handleRegisterBiometric = async () => {
     setIsRegistering(true);
@@ -19,7 +25,8 @@ export function AuthSection({ form, updateField, hasPinHash }: AuthSectionProps)
     const credId = await registerBiometric();
     setIsRegistering(false);
     if (credId) {
-      updateField('passkeyCredentialId', credId);
+      setLocalCredentialId(credId);
+      updateField('passkeyCredentialId', null);
       setBiometricStatus('✓ טביעת אצבע / Face ID נרשמה בהצלחה');
     } else {
       setBiometricStatus('הרישום נכשל — הדפדפן אינו תומך או הגישה נדחתה');
@@ -27,11 +34,14 @@ export function AuthSection({ form, updateField, hasPinHash }: AuthSectionProps)
   };
 
   const handleRemoveBiometric = () => {
+    clearLocalBiometricCredentialId();
+    setLocalCredentialId(null);
     updateField('passkeyCredentialId', null);
     setBiometricStatus('טביעת האצבע הוסרה');
   };
 
-  const hasBiometric = Boolean(form.passkeyCredentialId);
+  const hasBiometric = Boolean(localCredentialId);
+  const hasLegacySyncedBiometric = Boolean(form.passkeyCredentialId && !localCredentialId);
   const browserSupports = isBiometricSupported();
 
   return (
@@ -65,7 +75,9 @@ export function AuthSection({ form, updateField, hasPinHash }: AuthSectionProps)
                 {!browserSupports
                   ? 'הדפדפן הנוכחי אינו תומך ב-WebAuthn'
                   : hasBiometric
-                  ? 'רשום ופעיל — כפתור יופיע במסך הכניסה'
+                  ? 'רשום ופעיל במכשיר הזה — כפתור יופיע במסך הכניסה'
+                  : hasLegacySyncedBiometric
+                  ? 'יש רישום ישן ממכשיר אחר. רשום מחדש כאן כדי להפעיל במובייל.'
                   : 'לא רשום עדיין'}
               </p>
             </div>

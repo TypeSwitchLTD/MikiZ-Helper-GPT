@@ -6,6 +6,7 @@
 
 const RP_NAME = 'MikiZ Helper';
 const USER_ID = new TextEncoder().encode('mikiz-local-user');
+const LOCAL_CREDENTIAL_KEY = 'mission-control-local-passkey-id';
 
 function randomChallenge(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(32));
@@ -25,6 +26,16 @@ export function isBiometricSupported(): boolean {
     'credentials' in navigator &&
     typeof PublicKeyCredential !== 'undefined'
   );
+}
+
+export function getLocalBiometricCredentialId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(LOCAL_CREDENTIAL_KEY);
+}
+
+export function clearLocalBiometricCredentialId(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(LOCAL_CREDENTIAL_KEY);
 }
 
 /**
@@ -52,7 +63,9 @@ export async function registerBiometric(): Promise<string | null> {
     }) as PublicKeyCredential | null;
 
     if (!credential) return null;
-    return bufferToBase64(credential.rawId);
+    const credentialId = bufferToBase64(credential.rawId);
+    localStorage.setItem(LOCAL_CREDENTIAL_KEY, credentialId);
+    return credentialId;
   } catch {
     return null;
   }

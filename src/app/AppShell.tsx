@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isBiometricSupported, verifyBiometric } from "../features/auth/useBiometricAuth";
+import { getLocalBiometricCredentialId, isBiometricSupported, verifyBiometric } from "../features/auth/useBiometricAuth";
 import { CreateMissionItemButton } from "../features/create/CreateMissionItemButton";
 import { useReminderChecker } from "../features/reminders/useReminderChecker";
 import { ReminderToast } from "../features/reminders/ReminderToast";
@@ -24,7 +24,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.7.7";
+const APP_VERSION = "0.7.8";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -301,6 +301,7 @@ export function AppShell() {
   const [authPin, setAuthPin] = useState("");
   const [authError, setAuthError] = useState("");
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+  const [localBiometricCredentialId] = useState(() => getLocalBiometricCredentialId());
   const [pinShake, setPinShake] = useState(false);
   const [authLockout, setAuthLockout] = useState<LockoutState>(readLockout);
   const [lockCountdown, setLockCountdown] = useState(0);
@@ -460,7 +461,7 @@ export function AppShell() {
   };
 
   const attemptBiometric = useCallback(async () => {
-    const credId = data.settings?.passkeyCredentialId;
+    const credId = localBiometricCredentialId;
     if (!credId) return;
     setIsBiometricLoading(true);
     setAuthError("");
@@ -472,7 +473,7 @@ export function AppShell() {
     } else {
       setAuthError("זיהוי ביומטרי נכשל — הכנס PIN.");
     }
-  }, [data.settings?.passkeyCredentialId]);
+  }, [localBiometricCredentialId]);
 
   const handleAuthPinChange = (value: string) => {
     const nextPin = value.replace(/\D/g, "").slice(0, 6);
@@ -955,7 +956,7 @@ export function AppShell() {
           ) : (
             <>
               {/* ── Biometric button ── */}
-              {data.settings?.passkeyCredentialId && isBiometricSupported() && (
+              {localBiometricCredentialId && isBiometricSupported() && (
                 <button
                   type="button"
                   onClick={() => void attemptBiometric()}
@@ -980,7 +981,7 @@ export function AppShell() {
               )}
 
               <p className="mt-5 text-sm font-bold text-slate-500">
-                {data.settings?.passkeyCredentialId ? 'או הכנס קוד 6 ספרות' : 'הכנס קוד 6 ספרות'}
+                {localBiometricCredentialId ? 'או הכנס קוד 6 ספרות' : 'הכנס קוד 6 ספרות'}
               </p>
 
               {/* ── PIN dots ── */}
@@ -999,7 +1000,9 @@ export function AppShell() {
 
               <input
                 autoFocus
+                autoComplete="one-time-code"
                 inputMode="numeric"
+                pattern="[0-9]*"
                 maxLength={6}
                 value={authPin}
                 onChange={(e) => handleAuthPinChange(e.target.value)}
@@ -1226,7 +1229,7 @@ export function AppShell() {
         {/* Main content */}
         <section ref={mainSectionRef} className="mission-scroll min-w-0 px-2 pb-4 pt-0 sm:px-5 lg:px-8 xl:h-screen xl:overflow-y-auto">
           <header
-            className={`sticky top-0 z-30 -mx-2 mb-3 border-b px-2 backdrop-blur-xl transition-[padding] duration-200 sm:-mx-5 sm:mb-4 sm:px-5 lg:-mx-8 lg:px-8 ${scrollCompact ? "py-1.5" : "py-2"} ${theme.headerBg} ${theme.headerBorder}`}
+            className={`sticky top-0 z-30 -mx-2 mb-2 border-b px-2 backdrop-blur-xl transition-[padding] duration-200 sm:-mx-5 sm:mb-4 sm:px-5 lg:-mx-8 lg:px-8 ${scrollCompact ? "py-1" : "py-1.5 sm:py-2"} ${theme.headerBg} ${theme.headerBorder}`}
           >
             {/* ── Desktop header expanded (CSS-only toggle, no remount) ──── */}
             <div className={`mx-auto max-w-[1220px] gap-3 ${scrollCompact ? "hidden" : "hidden lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"}`}>
@@ -1309,17 +1312,17 @@ export function AppShell() {
               <div className="flex items-center gap-2">
                 {/* Title */}
                 <div className="min-w-0 flex-1">
-                  <h1 className="truncate text-xl font-black tracking-tight text-slate-950">
+                  <h1 className="truncate text-lg font-black tracking-tight text-slate-950">
                     {activeTab === "tasks" ? "היום שלך" : activeTabMeta?.label}
                   </h1>
-                  <p className="truncate text-[11px] font-bold text-slate-500">
+                  <p className="truncate text-[10px] font-bold text-slate-500">
                     {formatHebrewDate(data.todayISO)} · {data.settings?.location.label ?? ""}
                   </p>
                 </div>
                 {/* Morning briefing play */}
                 <button
                   type="button"
-                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-2xl text-sm font-black text-white shadow-sm transition active:scale-95 ${morning.isGeneratingVoice || morning.isSpeaking || morning.isMorningLoading ? "bg-rose-500" : "bg-gradient-to-br from-emerald-400 to-cyan-400"}`}
+                  className={`hidden h-9 w-9 shrink-0 place-items-center rounded-2xl text-sm font-black text-white shadow-sm transition active:scale-95 sm:grid ${morning.isGeneratingVoice || morning.isSpeaking || morning.isMorningLoading ? "bg-rose-500" : "bg-gradient-to-br from-emerald-400 to-cyan-400"}`}
                   title="נאום בוקר"
                   onClick={() => void morning.speakMorningBriefing()}
                 >
@@ -1385,7 +1388,7 @@ export function AppShell() {
             ) : null}
 
             {/* Mobile nav tabs */}
-            <nav className="mission-tabs -mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-1 xl:hidden" aria-label="Mission Control tabs mobile">
+            <nav className="mission-tabs -mx-1 mt-1 flex gap-1 overflow-x-auto px-1 pb-1 xl:hidden" aria-label="Mission Control tabs mobile">
               {appTabs.map((tab) => (
                 <button key={tab.id} type="button" className={`app-tab shrink-0 ${activeTab === tab.id ? theme.navActive : theme.navIdle}`} onClick={() => setActiveTab(tab.id)}>
                   {tab.label}
@@ -1456,7 +1459,7 @@ export function AppShell() {
             </>
           ) : null}
 
-          <div className="mx-auto max-w-[1220px] space-y-3 pb-28 sm:space-y-4">
+          <div className="mx-auto max-w-[1220px] space-y-2 pb-36 sm:space-y-4 sm:pb-28">
             {data.error ? (
               <section className="rounded-3xl bg-red-50 p-5 text-red-900 ring-1 ring-red-200">
                 <h2 className="font-bold">שגיאה בטעינת IndexedDB</h2>
@@ -1549,6 +1552,22 @@ export function AppShell() {
       </div>
 
       {/* ── Floating elements ─────────────────────────────────────────────────── */}
+
+      <button
+        type="button"
+        className={`fixed bottom-5 right-4 z-40 flex h-14 min-w-[10.5rem] items-center justify-center gap-2 rounded-full px-5 text-sm font-black text-white shadow-2xl ring-2 ring-white transition active:scale-95 lg:hidden ${
+          morning.isGeneratingVoice || morning.isSpeaking || morning.isMorningLoading
+            ? "bg-rose-600"
+            : "bg-gradient-to-l from-emerald-500 to-cyan-500"
+        }`}
+        title="נאום בוקר"
+        onClick={() => void morning.speakMorningBriefing()}
+      >
+        <span className="text-base">
+          {morning.isGeneratingVoice || morning.isMorningLoading ? `${morning.morningPlayProgress}%` : morning.isSpeaking ? "■" : "▶"}
+        </span>
+        <span>{morning.isSpeaking ? "עצור נאום" : "נאום בוקר"}</span>
+      </button>
 
       <CreateMissionItemButton
         settings={data.settings}

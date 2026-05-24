@@ -418,20 +418,20 @@ export function TasksHubTab({
   return (
     <div className="space-y-3 sm:space-y-5">
       {recommendedTask ? (
-        <section className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-sky-100 sm:rounded-[2rem] sm:p-5 sm:shadow-soft">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:gap-4">
+        <section className="rounded-2xl bg-white p-2.5 shadow-sm ring-1 ring-sky-100 sm:rounded-[2rem] sm:p-5 sm:shadow-soft">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 lg:gap-4">
             <div className="min-w-0">
               <p className="text-xs font-black text-emerald-700">
                 הפעולה הבאה המומלצת
               </p>
-              <h2 className="mobile-clamp-2 mt-1 text-lg font-black leading-tight tracking-tight text-slate-950 sm:text-3xl">
+              <h2 className="mobile-clamp-2 mt-0.5 text-base font-black leading-tight tracking-tight text-slate-950 sm:mt-1 sm:text-3xl">
                 {recommendedTask.title}
               </h2>
               <p className="mt-2 hidden max-w-3xl text-sm font-bold text-slate-500 sm:block">
                 {recommendedTask.whyNow ||
                   "פתח את הכרטיס ותתקדם בצעד הבא בלבד."}
               </p>
-              <div className="mt-3 flex flex-wrap gap-2 sm:mt-4">
+              <div className="mt-2 flex flex-wrap gap-2 sm:mt-4">
                 <button
                   type="button"
                   className="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white sm:px-4 sm:text-sm"
@@ -453,7 +453,7 @@ export function TasksHubTab({
               </div>
             </div>
             <div
-              className="grid h-20 w-20 place-items-center rounded-full bg-[conic-gradient(#22c55e_var(--progress),#e2e8f0_0)] p-1.5 sm:h-32 sm:w-32 sm:p-2"
+              className="grid h-16 w-16 place-items-center rounded-full bg-[conic-gradient(#22c55e_var(--progress),#e2e8f0_0)] p-1 sm:h-32 sm:w-32 sm:p-2"
               style={
                 {
                   "--progress": `${getTaskProgress(recommendedTask, subtasks).percent}%`,
@@ -462,7 +462,7 @@ export function TasksHubTab({
             >
               <div className="grid h-full w-full place-items-center rounded-full bg-white text-center">
                 <div>
-                  <p className="text-xl font-black sm:text-3xl">
+                  <p className="text-lg font-black sm:text-3xl">
                     {getTaskProgress(recommendedTask, subtasks).percent}%
                   </p>
                   <p className="text-[10px] font-black text-slate-500 sm:text-xs">במשימה</p>
@@ -474,7 +474,7 @@ export function TasksHubTab({
       ) : null}
 
       {!quietMode ? (
-        <section className="mission-chip-strip -mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
+        <section className="mission-chip-strip -mx-3 hidden gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
           {nextTasks.map((task) => (
             <button
               key={task.id}

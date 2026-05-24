@@ -430,7 +430,7 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
       pinEnabled: currentForm.pinEnabled,
       pinHash: currentForm.pinEnabled ? nextPinHash : null,
       pinUpdatedAt: nextPinCode ? new Date().toISOString() : (settings.pinUpdatedAt ?? null),
-      passkeyCredentialId: currentForm.passkeyCredentialId,
+      passkeyCredentialId: null,
       workday: {
         startTime: currentForm.workdayStartTime,
         endTime: currentForm.workdayEndTime,

@@ -214,7 +214,7 @@ function settings(patch: Partial<AppSettings> = {}): AppSettings {
   const mergedSettings = mergeImportedSettingsPreservingLocalSecrets(importedSettings, localSettings);
   assert.equal(mergedSettings.pinEnabled, true, 'manual import must preserve local PIN enabled state');
   assert.equal(mergedSettings.pinHash, 'local-pin-hash', 'manual import must preserve local PIN hash');
-  assert.equal(mergedSettings.passkeyCredentialId, 'local-passkey', 'manual import must preserve local passkey');
+  assert.equal(mergedSettings.passkeyCredentialId, null, 'manual import must not sync device-bound passkeys');
   assert.equal(mergedSettings.morningBriefing.androidPublishToken, 'local-cloud-token', 'manual import must preserve cloud token');
   assert.equal(
     mergedSettings.morningBriefing.androidPublishEndpoint,
