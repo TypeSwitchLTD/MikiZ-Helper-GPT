@@ -84,6 +84,30 @@ function removeCloudBootstrapParamsFromUrl() {
 }
 
 
+function mergeCloudWithLocalTokens(cloudPayload: CloudSyncPayload, localSettings: AppSettings | null): CloudSyncPayload {
+  if (!localSettings || !cloudPayload.settings) return cloudPayload;
+  const cloud = cloudPayload.settings;
+  const local = localSettings;
+  const mergedSettings: AppSettings = {
+    ...cloud,
+    voice: {
+      ...cloud.voice,
+      elevenLabsApiKey: local.voice?.elevenLabsApiKey || cloud.voice?.elevenLabsApiKey || '',
+      elevenLabsVoiceId: local.voice?.elevenLabsVoiceId || cloud.voice?.elevenLabsVoiceId || '',
+      elevenLabsProxyUrl: local.voice?.elevenLabsProxyUrl || cloud.voice?.elevenLabsProxyUrl || '',
+    },
+    morningBriefing: {
+      ...cloud.morningBriefing,
+      androidPublishToken: local.morningBriefing?.androidPublishToken || cloud.morningBriefing?.androidPublishToken || '',
+      androidPublishEndpoint: local.morningBriefing?.androidPublishEndpoint || cloud.morningBriefing?.androidPublishEndpoint || '/api/morning-briefing',
+    },
+    instantly: { apiKey: local.instantly?.apiKey || cloud.instantly?.apiKey },
+  };
+  const tasks = Array.isArray(cloudPayload.tasks) ? cloudPayload.tasks : [];
+  const subtasks = Array.isArray(cloudPayload.subtasks) ? cloudPayload.subtasks : [];
+  return { ...cloudPayload, settings: mergedSettings, tasks, subtasks };
+}
+
 function buildCloudSyncPayload(localData: MissionControlData): CloudSyncPayload | null {
   if (!localData.settings) return null;
   return {
@@ -221,13 +245,18 @@ export function useMissionControlData() {
           });
           localData = await getAllLocalData();
           if (localData.settings && hasCloudSyncToken(localData.settings)) {
-            const cloudResult = await pullCloudSyncPayload(localData.settings);
-            if (cloudResult.ok && cloudResult.payload && cloudResult.payload.settings) {
-              await importDailyStatePayload(cloudResult.payload);
-              localData = await getAllLocalData();
-              setCloudSyncStatus(`נטען מהענן למכשיר חדש: ${cloudResult.counts?.tasks ?? localData.tasks.length} משימות`);
-            } else {
-              setCloudSyncStatus(`Token נשמר, אבל טעינת ענן נכשלה: ${cloudResult.error ?? 'לא נמצא מידע בענן'}`);
+            try {
+              const cloudResult = await pullCloudSyncPayload(localData.settings);
+              if (cloudResult.ok && cloudResult.payload && cloudResult.payload.settings) {
+                const mergedBootstrap = mergeCloudWithLocalTokens(cloudResult.payload, localData.settings);
+                await importDailyStatePayload(mergedBootstrap);
+                localData = await getAllLocalData();
+                setCloudSyncStatus(`נטען מהענן למכשיר חדש: ${cloudResult.counts?.tasks ?? localData.tasks.length} משימות`);
+              } else {
+                setCloudSyncStatus(`Token נשמר, אבל טעינת ענן נכשלה: ${cloudResult.error ?? 'לא נמצא מידע בענן'}`);
+              }
+            } catch {
+              // Bootstrap cloud pull failed — continue with local data
             }
           }
           removeCloudBootstrapParamsFromUrl();
@@ -240,7 +269,8 @@ export function useMissionControlData() {
             try {
               const cloudResult = await pullCloudSyncPayload(localData.settings);
               if (cloudResult.ok && cloudResult.payload && cloudResult.payload.settings) {
-                await importDailyStatePayload(cloudResult.payload);
+                const mergedAuto = mergeCloudWithLocalTokens(cloudResult.payload, localData.settings);
+                await importDailyStatePayload(mergedAuto);
                 localData = await getAllLocalData();
                 setCloudSyncStatus(`סונכרן מהענן: ${cloudResult.counts?.tasks ?? localData.tasks.length} משימות`);
               }

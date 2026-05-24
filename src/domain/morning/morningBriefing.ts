@@ -108,8 +108,8 @@ export function pickMorningTasks(tasks: Task[], subtasks: Subtask[], todayISO: s
     })
     .filter(({ progress }) => progress.status !== 'done' && progress.status !== 'cancelled')
     .sort((a, b) => {
-      const morningTagA = a.task.tags.includes('morning-important') || a.task.tags.includes('important') ? 30 : 0;
-      const morningTagB = b.task.tags.includes('morning-important') || b.task.tags.includes('important') ? 30 : 0;
+      const morningTagA = (a.task.tags ?? []).includes('morning-important') || (a.task.tags ?? []).includes('important') ? 30 : 0;
+      const morningTagB = (b.task.tags ?? []).includes('morning-important') || (b.task.tags ?? []).includes('important') ? 30 : 0;
       const scoreA = morningTagA + priorityWeight[a.task.priority] * 12 + effortWeight[a.task.effort] + (a.progress.status === 'in_progress' ? 6 : 0) + Math.min(a.task.movedCount, 4) * 2;
       const scoreB = morningTagB + priorityWeight[b.task.priority] * 12 + effortWeight[b.task.effort] + (b.progress.status === 'in_progress' ? 6 : 0) + Math.min(b.task.movedCount, 4) * 2;
       return scoreB - scoreA || a.task.title.localeCompare(b.task.title);

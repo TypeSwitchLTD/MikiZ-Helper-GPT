@@ -22,6 +22,7 @@ export interface SettingsFormState {
   fileBackupEnabled: boolean;
   pinEnabled: boolean;
   authPinCode: string;
+  passkeyCredentialId: string | null;
   voiceNarratorGender: 'male' | 'female';
   morningNickname: string;
   morningMotivationLine: string;

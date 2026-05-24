@@ -258,7 +258,7 @@ export function scoreTaskMatch(text: string, task: Task, subtasks: Subtask[]): n
   const taskSubtasks = getSubtasksForTask(task.id, subtasks);
   const candidate = normalizeComparableText(text);
   const haystack = normalizeComparableText(
-    [task.title, task.projectId, task.domainId, task.tags.join(' '), task.whyNow, task.notes, ...taskSubtasks.map((s) => s.title)]
+    [task.title, task.projectId, task.domainId, (task.tags ?? []).join(' '), task.whyNow, task.notes, ...taskSubtasks.map((s) => s.title)]
       .filter(Boolean)
       .join(' '),
   );
@@ -268,7 +268,7 @@ export function scoreTaskMatch(text: string, task: Task, subtasks: Subtask[]): n
   const candidateTerms = candidate.split(' ').filter((term) => term.length > 2);
   score += candidateTerms.filter((term) => haystack.includes(term)).length;
   const candidateTokens = extractAffinityTokens(text);
-  const taskTokens = extractAffinityTokens(`${task.title} ${task.tags.join(' ')} ${task.projectId} ${task.domainId}`);
+  const taskTokens = extractAffinityTokens(`${task.title} ${(task.tags ?? []).join(' ')} ${task.projectId ?? ''} ${task.domainId ?? ''}`);
   score += [...candidateTokens].filter((token) => taskTokens.has(token)).length * 4;
   return score;
 }

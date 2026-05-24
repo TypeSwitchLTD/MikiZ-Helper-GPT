@@ -444,7 +444,7 @@ export function useMorningBriefing({
     for (const taskId of topTaskIds) {
       const task = tasks.find((t) => t.id === taskId);
       if (!task) continue;
-      const tags = Array.from(new Set([...task.tags, 'morning-important']));
+      const tags = Array.from(new Set([...(task.tags ?? []), 'morning-important']));
       await updateExistingTaskDetails(taskId, { tags });
     }
     await saveDailyPlan({

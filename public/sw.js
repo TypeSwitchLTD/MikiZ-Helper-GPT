@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mission-control-0-5-12-shell';
+const CACHE_NAME = 'mission-control-0-7-5-shell';
 const SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -15,6 +15,13 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  // JS/CSS assets are content-hashed — never cache via SW, always network
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  // HTML + shell: network first, cache fallback for offline
   event.respondWith(
     fetch(event.request).then((response) => {
       const copy = response.clone();

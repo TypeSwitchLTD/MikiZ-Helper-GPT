@@ -147,7 +147,10 @@ export const db = new MissionControlDatabase();
 let initializationPromise: Promise<void> | null = null;
 
 export async function initializeLocalDatabase(): Promise<void> {
-  initializationPromise ??= seedDatabaseIfNeeded();
+  initializationPromise ??= seedDatabaseIfNeeded().catch((err) => {
+    initializationPromise = null; // allow retry on next load
+    console.warn('[DB] Seed step failed (non-fatal):', err instanceof Error ? err.message : err);
+  });
   return initializationPromise;
 }
 
@@ -247,7 +250,7 @@ async function seedDatabaseIfNeeded(): Promise<void> {
 }
 
 export async function getAllLocalData() {
-  const [tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs] = await Promise.all([
+  const [rawTasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs] = await Promise.all([
     db.tasks.orderBy('createdAt').toArray(),
     db.subtasks.orderBy('sortOrder').toArray(),
     db.dailyPlans.orderBy('date').toArray(),
@@ -259,6 +262,8 @@ export async function getAllLocalData() {
     db.habits.orderBy('order').toArray(),
     db.habitLogs.orderBy('date').toArray(),
   ]);
+
+  const tasks = rawTasks.map(normalizeTask);
 
   return {
     tasks,
@@ -294,9 +299,21 @@ function asArray<T>(value: T[] | undefined): T[] {
   return Array.isArray(value) ? value : [];
 }
 
+/** Ensure required array/string fields exist on every task coming from cloud/import */
+function normalizeTask(task: Task): Task {
+  return {
+    ...task,
+    tags: Array.isArray(task.tags) ? task.tags : [],
+    projectId: task.projectId ?? '',
+    domainId: task.domainId ?? '',
+    notes: task.notes ?? '',
+    whyNow: task.whyNow ?? '',
+  };
+}
+
 export async function importDailyStatePayload(payload: DailyStateImportPayload): Promise<{ tasks: number; subtasks: number; importedAt: string }> {
   const importedAt = nowISO();
-  const tasks = asArray(payload.tasks);
+  const tasks = asArray(payload.tasks).map(normalizeTask);
   const subtasks = asArray(payload.subtasks);
   const dailyPlans = asArray(payload.dailyPlans);
   const recurringDefinitions = asArray(payload.recurringDefinitions);
@@ -305,7 +322,7 @@ export async function importDailyStatePayload(payload: DailyStateImportPayload):
   const reminders = asArray(payload.reminders);
   const settings = payload.settings ?? undefined;
 
-  if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0) {
+  if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0 && !settings) {
     throw new Error('Daily State JSON לא מכיל משימות / תתי־משימות / תוכניות יום לייבוא.');
   }
 

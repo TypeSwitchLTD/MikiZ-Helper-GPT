@@ -101,6 +101,7 @@ function toFormState(s: AppSettings): SettingsFormState {
     fileBackupEnabled: s.backup.fileBackupEnabled,
     pinEnabled: s.pinEnabled,
     authPinCode: '',
+    passkeyCredentialId: s.passkeyCredentialId ?? null,
     voiceNarratorGender: s.voice?.narratorGender ?? 'female',
     morningNickname: s.morningBriefing?.nickname ?? 'מיקי',
     morningMotivationLine: s.morningBriefing?.motivationLine ?? 'לא צריך לנצח את כל היום בבת אחת, רק את הצעד הראשון.',
@@ -428,6 +429,7 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
       pinEnabled: currentForm.pinEnabled,
       pinHash: currentForm.pinEnabled ? nextPinHash : null,
       pinUpdatedAt: nextPinCode ? new Date().toISOString() : (settings.pinUpdatedAt ?? null),
+      passkeyCredentialId: currentForm.passkeyCredentialId,
       workday: {
         startTime: currentForm.workdayStartTime,
         endTime: currentForm.workdayEndTime,

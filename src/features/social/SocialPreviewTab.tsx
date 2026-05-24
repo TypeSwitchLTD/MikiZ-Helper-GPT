@@ -177,12 +177,12 @@ export function SocialPreviewTab({
 
   // ── Task slices ────────────────────────────────────────────────────────────
   const isLeadTask = (task: Task) => {
-    const text = normalizeSearch(`${task.title} ${task.tags.join(' ')} ${task.projectId} ${task.domainId}`);
+    const text = normalizeSearch(`${task.title} ${(task.tags ?? []).join(' ')} ${task.projectId ?? ''} ${task.domainId ?? ''}`);
     return /lead|leads|apollo|instantly|linkedin|instagram|social|clinic|לידים|סושיאל|פולואפ|follow.up/.test(text);
   };
 
   const isContentTask = (task: Task) => {
-    const text = normalizeSearch(`${task.title} ${task.tags.join(' ')} ${task.domainId}`);
+    const text = normalizeSearch(`${task.title} ${(task.tags ?? []).join(' ')} ${task.domainId ?? ''}`);
     return /content|post|פוסט|תוכן|newsletter|רשומה|article/.test(text);
   };
 

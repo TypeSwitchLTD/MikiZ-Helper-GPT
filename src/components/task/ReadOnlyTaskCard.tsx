@@ -242,7 +242,7 @@ export function ReadOnlyTaskCard({
     task.priority,
   );
   const [editEffort, setEditEffort] = useState<Task["effort"]>(task.effort);
-  const [editTags, setEditTags] = useState<string[]>(task.tags);
+  const [editTags, setEditTags] = useState<string[]>(task.tags ?? []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskNotes, setNewSubtaskNotes] = useState("");
   const [editedSubtaskTitles, setEditedSubtaskTitles] = useState<Record<string, string>>({});

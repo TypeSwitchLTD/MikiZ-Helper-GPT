@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isBiometricSupported, verifyBiometric } from "../features/auth/useBiometricAuth";
 import { CreateMissionItemButton } from "../features/create/CreateMissionItemButton";
 import { useReminderChecker } from "../features/reminders/useReminderChecker";
 import { ReminderToast } from "../features/reminders/ReminderToast";
@@ -23,7 +24,24 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.7.4";
+const APP_VERSION = "0.7.5";
+
+// ─── Auth lockout constants ────────────────────────────────────────────────────
+const LOCKOUT_KEY = "mission-control-auth-lockout";
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+interface LockoutState { attempts: number; lockedUntil: number | null; }
+function readLockout(): LockoutState {
+  try {
+    const raw = localStorage.getItem(LOCKOUT_KEY);
+    if (raw) return JSON.parse(raw) as LockoutState;
+  } catch { /* ignore */ }
+  return { attempts: 0, lockedUntil: null };
+}
+function writeLockout(s: LockoutState) {
+  localStorage.setItem(LOCKOUT_KEY, JSON.stringify(s));
+}
 
 // ─── Color theme config ───────────────────────────────────────────────────────
 
@@ -282,6 +300,10 @@ export function AppShell() {
   const [focusRunning, setFocusRunning] = useState(false);
   const [authPin, setAuthPin] = useState("");
   const [authError, setAuthError] = useState("");
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+  const [pinShake, setPinShake] = useState(false);
+  const [authLockout, setAuthLockout] = useState<LockoutState>(readLockout);
+  const [lockCountdown, setLockCountdown] = useState(0);
   const [isPinAuthenticated, setIsPinAuthenticated] = useState(
     () => sessionStorage.getItem("mission-control-auth-ok") === "true",
   );
@@ -305,7 +327,7 @@ export function AppShell() {
     () =>
       data.tasks.filter((task) => {
         const text = normalizeSearch(
-          `${task.title} ${task.tags.join(" ")} ${task.domainId} ${task.projectId}`,
+          `${task.title} ${(task.tags ?? []).join(" ")} ${task.domainId ?? ""} ${task.projectId ?? ""}`,
         );
         return /lead|leads|apollo|instantly|clinic|clinics|invisalign|לידים|קליניקות/.test(text);
       }).length,
@@ -326,6 +348,9 @@ export function AppShell() {
   });
 
   // ─── Reminder checker ─────────────────────────────────────────────────────────
+  // Single source of timing: useReminderChecker fires every 60 s, plays the chime,
+  // then calls onDue so the toast appears at exactly the same moment as the sound.
+  // We also recompute whenever data.reminders changes (user added / snoozed / dismissed).
   const [dueReminders, setDueReminders] = useState<typeof data.reminders>([]);
   const computeDueReminders = useRef(() => {});
   useEffect(() => {
@@ -334,9 +359,8 @@ export function AppShell() {
       setDueReminders(data.reminders.filter((r) => r.status === "pending" && r.remindAt <= nowISO));
     };
     computeDueReminders.current = compute;
-    compute();
-    const timerId = setInterval(compute, 30_000);
-    return () => clearInterval(timerId);
+    compute(); // run once on mount / data change — shows past-due reminders immediately
+    // No independent interval here — useReminderChecker drives the timing via onDue
   }, [data.reminders]);
   useReminderChecker(data.reminders, () => computeDueReminders.current());
 
@@ -370,7 +394,30 @@ export function AppShell() {
     }
   }, [data.settings?.pinEnabled]);
 
+  // ─── Lockout countdown timer ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!authLockout.lockedUntil) { setLockCountdown(0); return; }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((authLockout.lockedUntil! - Date.now()) / 1000));
+      setLockCountdown(remaining);
+      if (remaining === 0) {
+        const cleared: LockoutState = { attempts: 0, lockedUntil: null };
+        setAuthLockout(cleared);
+        writeLockout(cleared);
+        setAuthError("");
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [authLockout.lockedUntil]);
+
   const submitAuthPin = async (nextPin: string) => {
+    // Block if locked
+    if (authLockout.lockedUntil && Date.now() < authLockout.lockedUntil) {
+      setAuthPin("");
+      return;
+    }
     setAuthError("");
     if (!data.settings?.pinHash) {
       setAuthError("PIN פעיל אבל לא הוגדר קוד. כבה/הגדר אותו בהגדרות המקומיות.");
@@ -378,14 +425,48 @@ export function AppShell() {
     }
     const nextHash = await hashPin(nextPin);
     if (nextHash === data.settings.pinHash) {
+      // Success — clear lockout
+      const cleared: LockoutState = { attempts: 0, lockedUntil: null };
+      setAuthLockout(cleared);
+      writeLockout(cleared);
       sessionStorage.setItem("mission-control-auth-ok", "true");
       setIsPinAuthenticated(true);
       setAuthPin("");
       return;
     }
-    setAuthError("קוד שגוי");
+    // Wrong PIN
+    const newAttempts = authLockout.attempts + 1;
+    const isNowLocked = newAttempts >= MAX_ATTEMPTS;
+    const next: LockoutState = isNowLocked
+      ? { attempts: 0, lockedUntil: Date.now() + LOCKOUT_MS }
+      : { attempts: newAttempts, lockedUntil: null };
+    setAuthLockout(next);
+    writeLockout(next);
+    // Shake animation
+    setPinShake(true);
+    window.setTimeout(() => setPinShake(false), 500);
+    setAuthError(
+      isNowLocked
+        ? "5 ניסיונות נכשלו — החשבון נחסם ל-15 דקות."
+        : `קוד שגוי — נותרו ${MAX_ATTEMPTS - newAttempts} ניסיונות`
+    );
     setAuthPin("");
   };
+
+  const attemptBiometric = useCallback(async () => {
+    const credId = data.settings?.passkeyCredentialId;
+    if (!credId) return;
+    setIsBiometricLoading(true);
+    setAuthError("");
+    const ok = await verifyBiometric(credId);
+    setIsBiometricLoading(false);
+    if (ok) {
+      sessionStorage.setItem("mission-control-auth-ok", "true");
+      setIsPinAuthenticated(true);
+    } else {
+      setAuthError("זיהוי ביומטרי נכשל — הכנס PIN.");
+    }
+  }, [data.settings?.passkeyCredentialId]);
 
   const handleAuthPinChange = (value: string) => {
     const nextPin = value.replace(/\D/g, "").slice(0, 6);
@@ -527,7 +608,7 @@ export function AppShell() {
           data.settings?.domains.find((d) => d.id === task.domainId)?.name ?? task.domainId;
         const haystack = normalizeSearch(
           [
-            task.title, task.whyNow, task.notes, task.tags.join(" "),
+            task.title, task.whyNow, task.notes, (task.tags ?? []).join(" "),
             projectName, domainName, task.scheduledTimeLabel,
             ...taskSubtasks.flatMap((s) => [s.title, s.notes, s.toolsNeeded]),
           ]
@@ -842,6 +923,10 @@ export function AppShell() {
 
   // ─── PIN screen ───────────────────────────────────────────────────────────────
   if (data.settings?.pinEnabled && !isPinAuthenticated) {
+    const isLocked = Boolean(authLockout.lockedUntil && Date.now() < authLockout.lockedUntil);
+    const lockMins = Math.ceil(lockCountdown / 60);
+    const lockSecs = lockCountdown % 60;
+
     return (
       <main
         dir="rtl"
@@ -850,30 +935,86 @@ export function AppShell() {
         <section className="w-full max-w-sm rounded-[2rem] bg-white p-8 text-center shadow-soft ring-1 ring-sky-100">
           <div className="text-5xl">☀️</div>
           <h1 className="mt-3 text-3xl font-black">MikiZ Helper</h1>
-          <p className="mt-1 text-sm font-bold text-slate-500">הכנס קוד 6 ספרות</p>
-          <div className="mt-6 flex justify-center gap-3" dir="ltr">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <span
-                key={index}
-                className={`h-4 w-4 rounded-full ring-2 ${index < authPin.length ? "bg-sky-600 ring-sky-600" : "bg-white ring-slate-300"}`}
+
+          {/* ── Locked state ── */}
+          {isLocked ? (
+            <div className="mt-6 rounded-2xl bg-rose-50 px-5 py-4 ring-1 ring-rose-200">
+              <p className="text-2xl font-black text-rose-700">🔒</p>
+              <p className="mt-1 text-sm font-black text-rose-800">החשבון נחסם לאחר 5 ניסיונות כושלים</p>
+              <p className="mt-2 text-2xl font-black text-rose-700 tabular-nums">
+                {String(lockMins).padStart(2, "0")}:{String(lockSecs).padStart(2, "0")}
+              </p>
+              <p className="mt-1 text-xs font-bold text-rose-500">הספירה לאחור לביטול הנעילה</p>
+            </div>
+          ) : (
+            <>
+              {/* ── Biometric button ── */}
+              {data.settings?.passkeyCredentialId && isBiometricSupported() && (
+                <button
+                  type="button"
+                  onClick={() => void attemptBiometric()}
+                  disabled={isBiometricLoading}
+                  className="mt-5 flex w-full items-center justify-center gap-3 rounded-2xl bg-slate-950 px-4 py-3.5 text-base font-black text-white transition hover:bg-slate-800 disabled:opacity-60"
+                >
+                  {isBiometricLoading ? (
+                    <span className="animate-pulse">מאמת...</span>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" className="h-6 w-6 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2C9.52 2 7.25 3.02 5.6 4.7" /><path d="M12 2c2.48 0 4.75 1.02 6.4 2.7" />
+                        <path d="M2.5 8.5A9.96 9.96 0 0 0 2 12c0 5.52 4.48 10 10 10s10-4.48 10-10c0-1.27-.24-2.49-.67-3.61" />
+                        <path d="M12 8a4 4 0 0 1 4 4c0 1.1-.45 2.1-1.17 2.83" />
+                        <path d="M12 8a4 4 0 0 0-4 4c0 2.21 1.79 4 4 4" />
+                        <path d="M12 12v.01" />
+                      </svg>
+                      כניסה עם טביעת אצבע / Face ID
+                    </>
+                  )}
+                </button>
+              )}
+
+              <p className="mt-5 text-sm font-bold text-slate-500">
+                {data.settings?.passkeyCredentialId ? 'או הכנס קוד 6 ספרות' : 'הכנס קוד 6 ספרות'}
+              </p>
+
+              {/* ── PIN dots ── */}
+              <div className={`mt-3 flex justify-center gap-3 ${pinShake ? "pin-shake" : ""}`} dir="ltr">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <span
+                    key={index}
+                    className={`h-4 w-4 rounded-full ring-2 transition-all duration-150 ${
+                      index < authPin.length
+                        ? authError ? "bg-rose-500 ring-rose-500 scale-110" : "bg-sky-600 ring-sky-600 scale-110"
+                        : "bg-white ring-slate-300"
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <input
+                autoFocus
+                inputMode="numeric"
+                maxLength={6}
+                value={authPin}
+                onChange={(e) => handleAuthPinChange(e.target.value)}
+                className="mt-4 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-2xl font-black tracking-[0.45em] outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                aria-label="קוד כניסה"
               />
-            ))}
-          </div>
-          <input
-            autoFocus
-            inputMode="numeric"
-            maxLength={6}
-            value={authPin}
-            onChange={(e) => handleAuthPinChange(e.target.value)}
-            className="mt-6 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-2xl font-black tracking-[0.45em] outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
-            aria-label="קוד כניסה"
-          />
-          {authError ? (
-            <p className="mt-4 rounded-2xl bg-rose-50 px-4 py-2 text-sm font-black text-rose-700 ring-1 ring-rose-100">
-              {authError}
-            </p>
-          ) : null}
-          <p className="mt-4 text-xs font-bold text-slate-400">כניסה אוטומטית אחרי 6 ספרות, בלי Enter.</p>
+
+              {/* ── Error / attempts feedback ── */}
+              {authError ? (
+                <p className="mt-4 rounded-2xl bg-rose-50 px-4 py-2 text-sm font-black text-rose-700 ring-1 ring-rose-100">
+                  {authError}
+                </p>
+              ) : authLockout.attempts > 0 ? (
+                <p className="mt-4 text-xs font-bold text-amber-600">
+                  נותרו {MAX_ATTEMPTS - authLockout.attempts} ניסיונות לפני נעילה
+                </p>
+              ) : null}
+
+              <p className="mt-4 text-xs font-bold text-slate-400">כניסה אוטומטית אחרי 6 ספרות, בלי Enter.</p>
+            </>
+          )}
         </section>
       </main>
     );

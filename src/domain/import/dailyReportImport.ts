@@ -385,7 +385,7 @@ export function parseDailyReportImport(text: string, options: DailyReportParseOp
       return {
         ...task,
         notes: [`Lead snapshot:`, ...leadSnapshot.lines].join('\n'),
-        tags: Array.from(new Set([...task.tags, 'lead-snapshot'])),
+        tags: Array.from(new Set([...(task.tags ?? []), 'lead-snapshot'])),
       };
     }
     return task;

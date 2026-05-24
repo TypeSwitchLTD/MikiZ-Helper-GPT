@@ -303,7 +303,7 @@ export function ReportTab({ reports, tasks, settings, todayISO, isSaving = false
                     </label>
 
                     <div className="flex flex-wrap gap-1 lg:max-w-sm lg:justify-end">
-                      {task.tags.map((tag) => (
+                      {(task.tags ?? []).map((tag) => (
                         <span key={tag} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-600">
                           #{tag}
                         </span>

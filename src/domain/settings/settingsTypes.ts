@@ -54,6 +54,7 @@ export interface AppSettings {
   pinEnabled: boolean;
   pinHash?: string | null;
   pinUpdatedAt?: string | null;
+  passkeyCredentialId?: string | null;
   workday: {
     startTime: string;
     endTime: string;

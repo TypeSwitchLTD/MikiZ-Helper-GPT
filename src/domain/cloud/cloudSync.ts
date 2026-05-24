@@ -64,10 +64,19 @@ export async function pullCloudSyncPayload(settings: AppSettings): Promise<Cloud
   const token = settings.morningBriefing?.androidPublishToken?.trim();
   if (!token) return { ok: false, error: 'חסר Token בהגדרות נאום בוקר / Android.' };
   const separator = getEndpoint(settings).includes('?') ? '&' : '?';
-  const response = await fetch(`${getEndpoint(settings)}${separator}token=${encodeURIComponent(token)}`, { headers: { 'Cache-Control': 'no-store' } });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok || !result?.ok) {
-    return { ok: false, error: result?.error || `Cloud pull failed (${response.status})` };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(
+      `${getEndpoint(settings)}${separator}token=${encodeURIComponent(token)}`,
+      { headers: { 'Cache-Control': 'no-store' }, signal: controller.signal },
+    );
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result?.ok) {
+      return { ok: false, error: result?.error || `Cloud pull failed (${response.status})` };
+    }
+    return result as CloudSyncResult;
+  } finally {
+    clearTimeout(timeout);
   }
-  return result as CloudSyncResult;
 }
