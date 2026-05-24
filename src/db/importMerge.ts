@@ -3,6 +3,7 @@ import type { Subtask, Task } from '../domain/tasks/taskTypes';
 export interface ImportMergeOptions {
   allowDeletedRestore?: boolean;
   preserveLocalSettingsSecrets?: boolean;
+  restoreTimestamp?: string;
 }
 
 export interface ImportMergeDecision<T> {
@@ -24,8 +25,11 @@ export function prepareTaskForImport(
   }
 
   if (localTask.deletedAt) {
-    if (options.allowDeletedRestore) {
+    if (options.allowDeletedRestore || item.updatedAt > localTask.updatedAt) {
       item.deletedAt = null;
+      if (options.restoreTimestamp && item.updatedAt < options.restoreTimestamp) {
+        item.updatedAt = options.restoreTimestamp;
+      }
       return { shouldUpsert: true, item };
     }
     return { shouldUpsert: false, item };
@@ -57,8 +61,13 @@ export function prepareSubtaskForImport(
   }
 
   if (localSubtask.deletedAt || localParentTask?.deletedAt) {
-    if (options.allowDeletedRestore) {
+    const localTombstoneUpdatedAt =
+      [localSubtask.updatedAt, localParentTask?.updatedAt].filter(Boolean).sort().at(-1) ?? localSubtask.updatedAt;
+    if (options.allowDeletedRestore || item.updatedAt > localTombstoneUpdatedAt) {
       item.deletedAt = null;
+      if (options.restoreTimestamp && item.updatedAt < options.restoreTimestamp) {
+        item.updatedAt = options.restoreTimestamp;
+      }
       return { shouldUpsert: true, item };
     }
     return { shouldUpsert: false, item };

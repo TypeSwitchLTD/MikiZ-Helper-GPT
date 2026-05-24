@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { prepareSubtaskForImport, prepareTaskForImport } from '../src/db/importMerge.ts';
 import { mergeImportedSettingsPreservingLocalSecrets } from '../src/db/settingsMerge.ts';
+import { normalizeSpeechRate } from '../src/domain/voice/speechRate.ts';
 import type { AppSettings } from '../src/domain/settings/settingsTypes.ts';
 import type { Subtask, Task } from '../src/domain/tasks/taskTypes.ts';
 
@@ -118,6 +119,25 @@ function settings(patch: Partial<AppSettings> = {}): AppSettings {
 
 {
   const decision = prepareTaskForImport(
+    task({ updatedAt: '2026-05-24T08:00:00.000Z' }),
+    task({ deletedAt: '2026-05-24T10:00:00.000Z', updatedAt: '2026-05-24T10:00:00.000Z' }),
+    { allowDeletedRestore: true, restoreTimestamp: '2026-05-24T12:00:00.000Z' },
+  );
+  assert.equal(decision.shouldUpsert, true, 'manual restore must upsert deleted task');
+  assert.equal(decision.item.updatedAt, '2026-05-24T12:00:00.000Z', 'manual restore must make task newer for other devices');
+}
+
+{
+  const decision = prepareTaskForImport(
+    task({ updatedAt: '2026-05-24T12:00:00.000Z' }),
+    task({ deletedAt: '2026-05-24T10:00:00.000Z', updatedAt: '2026-05-24T10:00:00.000Z' }),
+  );
+  assert.equal(decision.shouldUpsert, true, 'cloud pull must accept a newer resurrected task from another device');
+  assert.equal(decision.item.deletedAt, null, 'newer cloud task clears the local task tombstone');
+}
+
+{
+  const decision = prepareTaskForImport(
     task({ deletedAt: '2026-05-24T11:00:00.000Z', updatedAt: '2026-05-24T11:00:00.000Z' }),
     task({ updatedAt: '2026-05-24T09:00:00.000Z' }),
   );
@@ -150,6 +170,16 @@ function settings(patch: Partial<AppSettings> = {}): AppSettings {
   );
   assert.equal(decision.shouldUpsert, true, 'manual Daily State import must restore deleted subtasks');
   assert.equal(decision.item.deletedAt, null, 'manual restore clears the subtask tombstone');
+}
+
+{
+  const decision = prepareSubtaskForImport(
+    subtask({ updatedAt: '2026-05-24T12:00:00.000Z' }),
+    subtask({ deletedAt: '2026-05-24T10:00:00.000Z', updatedAt: '2026-05-24T10:00:00.000Z' }),
+    task({ deletedAt: '2026-05-24T10:00:00.000Z', updatedAt: '2026-05-24T10:00:00.000Z' }),
+  );
+  assert.equal(decision.shouldUpsert, true, 'cloud pull must accept a newer resurrected subtask from another device');
+  assert.equal(decision.item.deletedAt, null, 'newer cloud subtask clears the local subtask tombstone');
 }
 
 {
@@ -194,6 +224,13 @@ function settings(patch: Partial<AppSettings> = {}): AppSettings {
   assert.equal(mergedSettings.voice.elevenLabsApiKey, 'local-eleven-key', 'manual import must preserve ElevenLabs key');
   assert.equal(mergedSettings.instantly?.apiKey, 'local-instantly-key', 'manual import must preserve Instantly key');
   assert.equal(mergedSettings.projects[0]?.id, 'new-project', 'manual import can still refresh imported projects');
+}
+
+{
+  assert.equal(normalizeSpeechRate(0.2), 0.65, 'speech rate is clamped to the minimum');
+  assert.equal(normalizeSpeechRate(3), 2, 'speech rate is clamped to the maximum');
+  assert.equal(normalizeSpeechRate(1.35), 1.35, 'speech rate preserves valid values');
+  assert.equal(normalizeSpeechRate(undefined), 0.86, 'speech rate falls back to the default');
 }
 
 console.log('task tombstone and settings merge regression tests passed');

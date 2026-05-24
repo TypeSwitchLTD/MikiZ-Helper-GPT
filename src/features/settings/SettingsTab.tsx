@@ -9,6 +9,7 @@ import type { DailyReportImportTaskDraft } from '../../domain/import/dailyReport
 import type { SettingsPatch } from '../../domain/settings/settingsService';
 import { isFileSystemAccessAvailable, isIndexedDBAvailable } from '../../utils/storageGuards';
 import { createElevenLabsAudioUrl, getElevenLabsConfigStatus } from '../../domain/voice/elevenLabsTts';
+import { normalizeSpeechRate } from '../../domain/voice/speechRate';
 import type { SettingsFormState, LeadTableSettingsRow } from './settingsFormTypes';
 import { MorningSection } from './sections/MorningSection';
 import { ApiSection } from './sections/ApiSection';
@@ -505,15 +506,38 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
         useSpeakerBoost: form.elevenLabsUseSpeakerBoost, speechRate: form.speechRate, narratorGender: form.voiceNarratorGender,
       },
     };
+    const testText = 'בדיקת קול קצרה ממישן קונטרול. אם שינית מהירות, אתה אמור לשמוע את ההבדל עכשיו.';
+    const speechRate = normalizeSpeechRate(form.speechRate);
+    if (form.voiceEngine === 'browser') {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        setVoiceTestStatus('הדפדפן הזה לא תומך בהקראה.');
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(testText);
+      const voices = window.speechSynthesis.getVoices();
+      const hebrewVoice = voices.find((voice) => voice.lang.toLowerCase().startsWith('he')) ?? voices[0] ?? null;
+      if (hebrewVoice) utterance.voice = hebrewVoice;
+      utterance.lang = hebrewVoice?.lang || 'he-IL';
+      utterance.rate = speechRate;
+      utterance.pitch = 0.98;
+      utterance.volume = 1;
+      utterance.onend = () => setVoiceTestStatus(`הצליח. דפדפן במהירות ${speechRate.toFixed(2)}x.`);
+      utterance.onerror = () => setVoiceTestStatus('בדיקת קול בדפדפן נכשלה.');
+      setVoiceTestStatus(`מנגן בדפדפן במהירות ${speechRate.toFixed(2)}x...`);
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
     const status = getElevenLabsConfigStatus(draftSettings);
     if (!status.ok) { setVoiceTestStatus(status.message); return; }
     setVoiceTestStatus(`בודק קול... ${status.message}`);
-    const result = await createElevenLabsAudioUrl('בדיקת קול קצרה ממישן קונטרול. בוקר טוב מיקי.', draftSettings);
+    const result = await createElevenLabsAudioUrl(testText, draftSettings);
     if (!result.ok || !result.audioUrl) { setVoiceTestStatus(`נכשל: ${result.error || 'שגיאה לא ידועה'}`); return; }
     const audio = new Audio(result.audioUrl);
+    audio.playbackRate = speechRate;
     audio.onended = () => URL.revokeObjectURL(result.audioUrl ?? '');
     await audio.play();
-    setVoiceTestStatus(`הצליח. מנגן דרך ${result.usedProxy ? 'Proxy' : 'Direct'}.`);
+    setVoiceTestStatus(`הצליח. מנגן דרך ${result.usedProxy ? 'Proxy' : 'Direct'} במהירות ${speechRate.toFixed(2)}x.`);
   }
 
   // ── Cloudflare morning API test ──

@@ -327,6 +327,9 @@ export async function importDailyStatePayload(
   options: ImportMergeOptions = {},
 ): Promise<{ tasks: number; subtasks: number; importedAt: string }> {
   const importedAt = nowISO();
+  const mergeOptions: ImportMergeOptions = options.allowDeletedRestore
+    ? { ...options, restoreTimestamp: options.restoreTimestamp ?? importedAt }
+    : options;
   const tasks = asArray(payload.tasks).map(normalizeTask);
   const subtasks = asArray(payload.subtasks);
   const dailyPlans = asArray(payload.dailyPlans);
@@ -366,7 +369,7 @@ export async function importDailyStatePayload(
       if (tasks.length) {
         const existingTasks = await db.tasks.bulkGet(tasks.map((t) => t.id));
         const toUpsert = tasks
-          .map((task, index) => prepareTaskForImport(task, existingTasks[index], options))
+          .map((task, index) => prepareTaskForImport(task, existingTasks[index], mergeOptions))
           .filter((decision) => decision.shouldUpsert)
           .map((decision) => decision.item);
         if (toUpsert.length) await db.tasks.bulkPut(toUpsert);
@@ -390,7 +393,7 @@ export async function importDailyStatePayload(
         const existingSubtasks = await db.subtasks.bulkGet(subtasks.map((s) => s.id));
         const localParentTasks = await db.tasks.bulkGet(subtasks.map((s) => s.taskId));
         const toUpsert = subtasks
-          .map((subtask, index) => prepareSubtaskForImport(subtask, existingSubtasks[index], localParentTasks[index], options))
+          .map((subtask, index) => prepareSubtaskForImport(subtask, existingSubtasks[index], localParentTasks[index], mergeOptions))
           .filter((decision) => decision.shouldUpsert)
           .map((decision) => decision.item);
         if (toUpsert.length) await db.subtasks.bulkPut(toUpsert);

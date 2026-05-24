@@ -10,6 +10,7 @@ import {
   getElevenLabsConfigStatus,
   isElevenLabsConfigured,
 } from '../../domain/voice/elevenLabsTts';
+import { normalizeSpeechRate } from '../../domain/voice/speechRate';
 import type { AppSettings } from '../../domain/settings/settingsTypes';
 import type { Subtask, Task } from '../../domain/tasks/taskTypes';
 
@@ -237,7 +238,7 @@ export function useMorningBriefing({
         const utterance = new SpeechSynthesisUtterance(chunk);
         if (preferredVoice) utterance.voice = preferredVoice;
         utterance.lang = preferredVoice?.lang || 'he-IL';
-        utterance.rate = settings?.voice?.speechRate ?? 1.1;
+        utterance.rate = normalizeSpeechRate(settings?.voice?.speechRate);
         utterance.pitch = 0.98;
         utterance.volume = 1;
         utterance.onend = () => {
@@ -284,6 +285,7 @@ export function useMorningBriefing({
           cleanupAudioObjectUrl();
           currentAudioUrlRef.current = result.audioUrl;
           const audio = new Audio(result.audioUrl);
+          audio.playbackRate = normalizeSpeechRate(settings?.voice?.speechRate);
           audioRef.current = audio;
           setIsSpeaking(true);
           audio.onended = () => {
