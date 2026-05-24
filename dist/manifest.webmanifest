@@ -1,0 +1,19 @@
+{
+  "name": "Miki Mission Control",
+  "short_name": "Mission Control",
+  "description": "Local-first personal mission control dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "dir": "rtl",
+  "lang": "he-IL",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
