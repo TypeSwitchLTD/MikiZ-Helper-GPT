@@ -12,6 +12,7 @@ import { createSeedData } from './seed';
 import { APP_VERSION, DATABASE_NAME, type BackupSnapshot } from './schema';
 import { createId } from '../utils/ids';
 import { nowISO, getTodayISO } from '../utils/dates';
+import { prepareSubtaskForImport, prepareTaskForImport, type ImportMergeOptions } from './importMerge';
 
 export class MissionControlDatabase extends Dexie {
   tasks!: Table<Task, string>;
@@ -304,10 +305,6 @@ interface DailyStateImportPayload {
   settings?: AppSettings | null;
 }
 
-interface DailyStateImportOptions {
-  allowDeletedRestore?: boolean;
-}
-
 function asArray<T>(value: T[] | undefined): T[] {
   return Array.isArray(value) ? value : [];
 }
@@ -326,7 +323,7 @@ function normalizeTask(task: Task): Task {
 
 export async function importDailyStatePayload(
   payload: DailyStateImportPayload,
-  options: DailyStateImportOptions = {},
+  options: ImportMergeOptions = {},
 ): Promise<{ tasks: number; subtasks: number; importedAt: string }> {
   const importedAt = nowISO();
   const tasks = asArray(payload.tasks).map(normalizeTask);
@@ -360,34 +357,10 @@ export async function importDailyStatePayload(
       // ── Smart merge for tasks: local cancellations/completions always survive ──
       if (tasks.length) {
         const existingTasks = await db.tasks.bulkGet(tasks.map((t) => t.id));
-        const toUpsert = tasks.filter((cloudTask, i) => {
-          const local = existingTasks[i];
-          if (!local) return true; // new task → add it
-
-          // Rule 0: Deletion tombstones are sticky across devices.
-          if (cloudTask.deletedAt) return !local.deletedAt || cloudTask.updatedAt > local.updatedAt;
-          if (local.deletedAt && options.allowDeletedRestore) {
-            cloudTask.deletedAt = null;
-            return true;
-          }
-          if (local.deletedAt && !cloudTask.deletedAt) return false;
-
-          // Rule 1: A locally cancelled task can NEVER be resurrected by a cloud import.
-          // This is the main cause of "127 ghost tasks" — old JSON has the task without
-          // cancellation, and it overwrites the local cancelled state.
-          if (local.statusOverride === 'cancelled' && cloudTask.statusOverride !== 'cancelled') {
-            return false; // keep local: cancelled stays cancelled
-          }
-
-          // Rule 2: A locally completed task is also protected.
-          if (local.completedAt && !cloudTask.completedAt) {
-            return false; // keep local: completed stays completed
-          }
-
-          // Rule 3: Otherwise last-write-wins by updatedAt.
-          // Use strict > so equal timestamps keep local (avoids re-importing unchanged data).
-          return cloudTask.updatedAt > local.updatedAt;
-        });
+        const toUpsert = tasks
+          .map((task, index) => prepareTaskForImport(task, existingTasks[index], options))
+          .filter((decision) => decision.shouldUpsert)
+          .map((decision) => decision.item);
         if (toUpsert.length) await db.tasks.bulkPut(toUpsert);
 
         const deletedTaskIds = tasks.filter((task) => task.deletedAt).map((task) => task.id);
@@ -408,21 +381,10 @@ export async function importDailyStatePayload(
       if (subtasks.length) {
         const existingSubtasks = await db.subtasks.bulkGet(subtasks.map((s) => s.id));
         const localParentTasks = await db.tasks.bulkGet(subtasks.map((s) => s.taskId));
-        const toUpsert = subtasks.filter((cloudSubtask, i) => {
-          const local = existingSubtasks[i];
-          const localParentTask = localParentTasks[i];
-          if (!local) return true;
-          if (cloudSubtask.deletedAt) return !local.deletedAt || cloudSubtask.updatedAt > local.updatedAt;
-          if ((local.deletedAt || localParentTask?.deletedAt) && options.allowDeletedRestore) {
-            cloudSubtask.deletedAt = null;
-            return true;
-          }
-          if (localParentTask?.deletedAt && !cloudSubtask.deletedAt) return false;
-          if (local.deletedAt && !cloudSubtask.deletedAt) return false;
-          if (local.status === 'cancelled' && cloudSubtask.status !== 'cancelled') return false;
-          if (local.status === 'done' && cloudSubtask.status !== 'done') return false;
-          return cloudSubtask.updatedAt > local.updatedAt;
-        });
+        const toUpsert = subtasks
+          .map((subtask, index) => prepareSubtaskForImport(subtask, existingSubtasks[index], localParentTasks[index], options))
+          .filter((decision) => decision.shouldUpsert)
+          .map((decision) => decision.item);
         if (toUpsert.length) await db.subtasks.bulkPut(toUpsert);
       }
       if (dailyPlans.length) await db.dailyPlans.bulkPut(dailyPlans);
