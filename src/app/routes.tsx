@@ -3,6 +3,7 @@ export type AppTabId = "tasks" | "social" | "workouts" | "personal" | "reminders
 export interface AppTab {
   id: AppTabId;
   label: string;
+  mobileLabel?: string;
   description: string;
 }
 
@@ -15,6 +16,7 @@ export const appTabs: AppTab[] = [
   {
     id: "social",
     label: "לידים וסושיאל",
+    mobileLabel: "סושיאל",
     description: "Instantly, Instagram, LinkedIn ומשימות תוכן עתידיות",
   },
   {

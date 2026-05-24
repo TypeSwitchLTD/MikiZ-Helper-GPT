@@ -24,7 +24,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.0";
+const APP_VERSION = "0.8.1";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -1375,11 +1375,12 @@ export function AppShell() {
                 {/* Morning briefing play */}
                 <button
                   type="button"
-                  className={`hidden h-9 w-9 shrink-0 place-items-center rounded-2xl text-sm font-black text-white shadow-sm transition active:scale-95 sm:grid ${morning.isGeneratingVoice || morning.isSpeaking || morning.isMorningLoading ? "bg-rose-500" : "bg-gradient-to-br from-emerald-400 to-cyan-400"}`}
+                  className={`flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-2xl px-3 text-xs font-black text-white shadow-sm transition active:scale-95 ${morning.isGeneratingVoice || morning.isSpeaking || morning.isMorningLoading ? "bg-rose-500" : "bg-gradient-to-br from-emerald-400 to-cyan-400"}`}
                   title="נאום בוקר"
-                  onClick={() => void morning.speakMorningBriefing()}
+                  onClick={() => void morning.openMorningBriefing()}
                 >
                   {morning.isGeneratingVoice || morning.isMorningLoading ? `${morning.morningPlayProgress}%` : morning.isSpeaking ? "■" : "▶"}
+                  <span>נאום</span>
                 </button>
                 {/* Search toggle */}
                 <button
@@ -1441,10 +1442,10 @@ export function AppShell() {
             ) : null}
 
             {/* Mobile nav tabs */}
-            <nav className="mission-tabs -mx-1 mt-1 flex gap-1 overflow-x-auto px-1 pb-1 xl:hidden" aria-label="Mission Control tabs mobile">
+            <nav className="mission-tabs -mx-1 mt-1 flex gap-0.5 overflow-x-auto px-1 pb-1 xl:hidden" aria-label="Mission Control tabs mobile">
               {appTabs.map((tab) => (
                 <button key={tab.id} type="button" className={`app-tab shrink-0 ${activeTab === tab.id ? theme.navActive : theme.navIdle}`} onClick={() => setActiveTab(tab.id)}>
-                  {tab.label}
+                  {tab.mobileLabel ?? tab.label}
                 </button>
               ))}
             </nav>
@@ -1608,7 +1609,7 @@ export function AppShell() {
 
       <button
         type="button"
-        className={`fixed bottom-5 right-4 z-40 flex h-14 min-w-[10.5rem] items-center justify-center gap-2 rounded-full px-5 text-sm font-black text-white shadow-2xl ring-2 ring-white transition active:scale-95 lg:hidden ${
+        className={`hidden ${
           morning.isGeneratingVoice || morning.isSpeaking || morning.isMorningLoading
             ? "bg-rose-600"
             : "bg-gradient-to-l from-emerald-500 to-cyan-500"
@@ -1729,10 +1730,6 @@ export function AppShell() {
           onSpeakMorningBriefing={() => {
             setReadyCheckOpen(false);
             void morning.openMorningBriefing();
-          }}
-          onOpenFocusTimer={() => {
-            setReadyCheckOpen(false);
-            setFocusTimerOpen(true);
           }}
           onClose={() => setReadyCheckOpen(false)}
         />

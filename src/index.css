@@ -132,10 +132,10 @@ button:disabled {
 
 @media (max-width: 767px) {
   .app-tab {
-    padding: 0.5rem 0.7rem;
-    font-size: 0.76rem;
+    padding: 0.45rem 0.42rem;
+    font-size: 0.72rem;
     line-height: 1;
-    border-radius: 0.95rem;
+    border-radius: 0.8rem;
     white-space: nowrap;
   }
 
