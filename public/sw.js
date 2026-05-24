@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mission-control-0-7-5-shell';
+const CACHE_NAME = 'mission-control-0-7-6-shell';
 const SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -16,6 +16,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+  // API responses carry live cloud state. Never cache them in the app shell.
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
   // JS/CSS assets are content-hashed — never cache via SW, always network
   if (url.pathname.startsWith('/assets/')) {
     event.respondWith(fetch(event.request));

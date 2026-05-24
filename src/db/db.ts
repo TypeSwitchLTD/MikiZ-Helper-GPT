@@ -13,6 +13,7 @@ import { APP_VERSION, DATABASE_NAME, type BackupSnapshot } from './schema';
 import { createId } from '../utils/ids';
 import { nowISO, getTodayISO } from '../utils/dates';
 import { prepareSubtaskForImport, prepareTaskForImport, type ImportMergeOptions } from './importMerge';
+import { mergeImportedSettingsPreservingLocalSecrets } from './settingsMerge';
 
 export class MissionControlDatabase extends Dexie {
   tasks!: Table<Task, string>;
@@ -352,7 +353,14 @@ export async function importDailyStatePayload(
         data: beforeImport,
       });
 
-      if (settings) await db.settings.put(settings);
+      if (settings) {
+        const localSettings = await db.settings.get('default');
+        await db.settings.put(
+          options.preserveLocalSettingsSecrets
+            ? mergeImportedSettingsPreservingLocalSecrets(settings, localSettings)
+            : settings,
+        );
+      }
 
       // ── Smart merge for tasks: local cancellations/completions always survive ──
       if (tasks.length) {

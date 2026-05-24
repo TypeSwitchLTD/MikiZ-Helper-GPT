@@ -40,6 +40,17 @@ export function hasCloudSyncToken(settings: AppSettings | null | undefined): boo
   return Boolean(settings?.morningBriefing?.androidPublishToken?.trim());
 }
 
+function buildPullUrl(settings: AppSettings, token: string): string {
+  const endpoint = getEndpoint(settings);
+  const base = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+  const url = new URL(endpoint, base);
+  url.searchParams.set('token', token);
+  url.searchParams.set('_', String(Date.now()));
+
+  if (/^https?:\/\//i.test(endpoint)) return url.toString();
+  return `${url.pathname}${url.search}`;
+}
+
 export async function pushCloudSyncPayload(settings: AppSettings, payload: CloudSyncPayload): Promise<CloudSyncResult> {
   const token = settings.morningBriefing?.androidPublishToken?.trim();
   if (!token) return { ok: false, error: 'חסר Token בהגדרות נאום בוקר / Android.' };
@@ -63,14 +74,14 @@ export async function pushCloudSyncPayload(settings: AppSettings, payload: Cloud
 export async function pullCloudSyncPayload(settings: AppSettings): Promise<CloudSyncResult> {
   const token = settings.morningBriefing?.androidPublishToken?.trim();
   if (!token) return { ok: false, error: 'חסר Token בהגדרות נאום בוקר / Android.' };
-  const separator = getEndpoint(settings).includes('?') ? '&' : '?';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetch(
-      `${getEndpoint(settings)}${separator}token=${encodeURIComponent(token)}`,
-      { headers: { 'Cache-Control': 'no-store' }, signal: controller.signal },
-    );
+    const response = await fetch(buildPullUrl(settings, token), {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
+      signal: controller.signal,
+    });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || !result?.ok) {
       return { ok: false, error: result?.error || `Cloud pull failed (${response.status})` };

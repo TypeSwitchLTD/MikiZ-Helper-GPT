@@ -39,6 +39,8 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
+const CLIENT_APP_VERSION = '0.7.6-sync-hardening';
+
 interface MissionControlData {
   tasks: Task[];
   subtasks: Subtask[];
@@ -114,7 +116,7 @@ function buildCloudSyncPayload(localData: MissionControlData): CloudSyncPayload 
   return {
     schemaVersion: '0.6.0',
     exportedAt: nowISO(),
-    appVersion: '0.6.0-cloud-sync-foundation',
+    appVersion: CLIENT_APP_VERSION,
     tasks: localData.tasks,
     subtasks: localData.subtasks,
     dailyPlans: localData.dailyPlans,
@@ -273,9 +275,12 @@ export function useMissionControlData() {
           // Using localStorage (not sessionStorage) so the throttle persists across
           // page reloads, but a fresh pull still happens after 3 minutes of inactivity.
           const LAST_PULL_KEY = 'mc-last-cloud-pull';
+          const CLIENT_VERSION_KEY = 'mc-client-version';
           const PULL_THROTTLE_MS = 3 * 60 * 1000; // 3 minutes
           const lastPull = Number(localStorage.getItem(LAST_PULL_KEY) || '0');
-          const shouldPull = Date.now() - lastPull > PULL_THROTTLE_MS;
+          const lastClientVersion = localStorage.getItem(CLIENT_VERSION_KEY);
+          const versionChanged = lastClientVersion !== CLIENT_APP_VERSION;
+          const shouldPull = versionChanged || Date.now() - lastPull > PULL_THROTTLE_MS;
 
           if (shouldPull) {
             localStorage.setItem(LAST_PULL_KEY, String(Date.now()));
@@ -287,6 +292,7 @@ export function useMissionControlData() {
                 // After cloud pull, roll over stale today-tasks immediately
                 await rolloverStaleTodayTasks();
                 localData = await getAllLocalData();
+                localStorage.setItem(CLIENT_VERSION_KEY, CLIENT_APP_VERSION);
                 setCloudSyncStatus(`סונכרן מהענן: ${cloudResult.counts?.tasks ?? localData.tasks.length} משימות`);
               }
             } catch {
@@ -754,7 +760,7 @@ export function useMissionControlData() {
         setIsSaving(true);
         const result = await importDailyStatePayload(
           payload as Parameters<typeof importDailyStatePayload>[0],
-          { allowDeletedRestore: true },
+          { allowDeletedRestore: true, preserveLocalSettingsSecrets: true },
         );
         // After import, roll over any stale "today" tasks (handles import of yesterday's JSON)
         await rolloverStaleTodayTasks();

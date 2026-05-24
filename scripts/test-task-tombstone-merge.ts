@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { prepareSubtaskForImport, prepareTaskForImport } from '../src/db/importMerge.ts';
+import { mergeImportedSettingsPreservingLocalSecrets } from '../src/db/settingsMerge.ts';
+import type { AppSettings } from '../src/domain/settings/settingsTypes.ts';
 import type { Subtask, Task } from '../src/domain/tasks/taskTypes.ts';
 
 const baseTask: Task = {
@@ -47,6 +49,53 @@ function task(patch: Partial<Task>): Task {
 
 function subtask(patch: Partial<Subtask>): Subtask {
   return { ...baseSubtask, ...patch };
+}
+
+function settings(patch: Partial<AppSettings> = {}): AppSettings {
+  const base: AppSettings = {
+    id: 'default',
+    colorTheme: 'slate-sky',
+    pinEnabled: false,
+    pinHash: null,
+    pinUpdatedAt: null,
+    passkeyCredentialId: null,
+    workday: {
+      startTime: '09:00',
+      endTime: '18:00',
+      primaryRestWindow: { enabled: true, label: 'Break', startTime: '14:00', endTime: '15:00' },
+      secondaryRestWindow: null,
+    },
+    location: { label: 'Tel Aviv', city: 'Tel Aviv', country: 'Israel', timezone: 'Asia/Jerusalem' },
+    scheduling: { warnOnRestWindowConflict: true, autoAddRecurringToToday: false },
+    backup: { autoBackupEnabled: true, backupIntervalMinutes: 30, lastBackupAt: null, lastSnapshotAt: null, fileBackupEnabled: false },
+    morningBriefing: {
+      nickname: 'Miki',
+      motivationLine: '',
+      closingLine: '',
+      style: 'big_brother',
+      includeExerciseReminder: true,
+      exerciseLine: '',
+      androidPublishEndpoint: '/api/morning-briefing',
+      androidPublishToken: '',
+      lastPublishedAt: null,
+    },
+    voice: {
+      engine: 'browser',
+      elevenLabsApiKey: '',
+      elevenLabsVoiceId: '',
+      elevenLabsProxyUrl: '',
+    },
+    socialConnections: {
+      linkedin: { enabled: false, profileUrl: '', accessTokenPlaceholder: '', lastCheckedAt: null },
+      instagram: { enabled: false, username: '', accessTokenPlaceholder: '', lastCheckedAt: null },
+    },
+    instantly: { apiKey: '' },
+    projects: [{ id: 'personal', name: 'Personal', isActive: true }],
+    domains: [{ id: 'operations', name: 'Operations', isActive: true }],
+    createdAt: '2026-05-24T08:00:00.000Z',
+    updatedAt: '2026-05-24T08:00:00.000Z',
+  };
+  return { ...base, ...patch };
 }
 
 {
@@ -112,4 +161,39 @@ function subtask(patch: Partial<Subtask>): Subtask {
   assert.equal(decision.shouldUpsert, false, 'cloud pull must not undo a locally completed subtask');
 }
 
-console.log('task tombstone merge regression tests passed');
+{
+  const localSettings = settings();
+  localSettings.pinEnabled = true;
+  localSettings.pinHash = 'local-pin-hash';
+  localSettings.passkeyCredentialId = 'local-passkey';
+  localSettings.morningBriefing.androidPublishToken = 'local-cloud-token';
+  localSettings.morningBriefing.androidPublishEndpoint = 'https://example.com/api/morning-briefing';
+  localSettings.voice.elevenLabsApiKey = 'local-eleven-key';
+  localSettings.instantly = { apiKey: 'local-instantly-key' };
+
+  const importedSettings = settings();
+  importedSettings.pinEnabled = false;
+  importedSettings.pinHash = null;
+  importedSettings.passkeyCredentialId = null;
+  importedSettings.morningBriefing.androidPublishToken = '';
+  importedSettings.morningBriefing.androidPublishEndpoint = '/api/morning-briefing';
+  importedSettings.voice.elevenLabsApiKey = '';
+  importedSettings.instantly = { apiKey: '' };
+  importedSettings.projects = [{ id: 'new-project', name: 'New Project', isActive: true }];
+
+  const mergedSettings = mergeImportedSettingsPreservingLocalSecrets(importedSettings, localSettings);
+  assert.equal(mergedSettings.pinEnabled, true, 'manual import must preserve local PIN enabled state');
+  assert.equal(mergedSettings.pinHash, 'local-pin-hash', 'manual import must preserve local PIN hash');
+  assert.equal(mergedSettings.passkeyCredentialId, 'local-passkey', 'manual import must preserve local passkey');
+  assert.equal(mergedSettings.morningBriefing.androidPublishToken, 'local-cloud-token', 'manual import must preserve cloud token');
+  assert.equal(
+    mergedSettings.morningBriefing.androidPublishEndpoint,
+    'https://example.com/api/morning-briefing',
+    'manual import must preserve cloud endpoint',
+  );
+  assert.equal(mergedSettings.voice.elevenLabsApiKey, 'local-eleven-key', 'manual import must preserve ElevenLabs key');
+  assert.equal(mergedSettings.instantly?.apiKey, 'local-instantly-key', 'manual import must preserve Instantly key');
+  assert.equal(mergedSettings.projects[0]?.id, 'new-project', 'manual import can still refresh imported projects');
+}
+
+console.log('task tombstone and settings merge regression tests passed');

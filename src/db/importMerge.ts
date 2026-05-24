@@ -2,6 +2,7 @@ import type { Subtask, Task } from '../domain/tasks/taskTypes';
 
 export interface ImportMergeOptions {
   allowDeletedRestore?: boolean;
+  preserveLocalSettingsSecrets?: boolean;
 }
 
 export interface ImportMergeDecision<T> {
