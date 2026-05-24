@@ -304,6 +304,10 @@ interface DailyStateImportPayload {
   settings?: AppSettings | null;
 }
 
+interface DailyStateImportOptions {
+  allowDeletedRestore?: boolean;
+}
+
 function asArray<T>(value: T[] | undefined): T[] {
   return Array.isArray(value) ? value : [];
 }
@@ -320,7 +324,10 @@ function normalizeTask(task: Task): Task {
   };
 }
 
-export async function importDailyStatePayload(payload: DailyStateImportPayload): Promise<{ tasks: number; subtasks: number; importedAt: string }> {
+export async function importDailyStatePayload(
+  payload: DailyStateImportPayload,
+  options: DailyStateImportOptions = {},
+): Promise<{ tasks: number; subtasks: number; importedAt: string }> {
   const importedAt = nowISO();
   const tasks = asArray(payload.tasks).map(normalizeTask);
   const subtasks = asArray(payload.subtasks);
@@ -359,6 +366,10 @@ export async function importDailyStatePayload(payload: DailyStateImportPayload):
 
           // Rule 0: Deletion tombstones are sticky across devices.
           if (cloudTask.deletedAt) return !local.deletedAt || cloudTask.updatedAt > local.updatedAt;
+          if (local.deletedAt && options.allowDeletedRestore) {
+            cloudTask.deletedAt = null;
+            return true;
+          }
           if (local.deletedAt && !cloudTask.deletedAt) return false;
 
           // Rule 1: A locally cancelled task can NEVER be resurrected by a cloud import.
@@ -400,9 +411,13 @@ export async function importDailyStatePayload(payload: DailyStateImportPayload):
         const toUpsert = subtasks.filter((cloudSubtask, i) => {
           const local = existingSubtasks[i];
           const localParentTask = localParentTasks[i];
-          if (localParentTask?.deletedAt && !cloudSubtask.deletedAt) return false;
           if (!local) return true;
           if (cloudSubtask.deletedAt) return !local.deletedAt || cloudSubtask.updatedAt > local.updatedAt;
+          if ((local.deletedAt || localParentTask?.deletedAt) && options.allowDeletedRestore) {
+            cloudSubtask.deletedAt = null;
+            return true;
+          }
+          if (localParentTask?.deletedAt && !cloudSubtask.deletedAt) return false;
           if (local.deletedAt && !cloudSubtask.deletedAt) return false;
           if (local.status === 'cancelled' && cloudSubtask.status !== 'cancelled') return false;
           if (local.status === 'done' && cloudSubtask.status !== 'done') return false;

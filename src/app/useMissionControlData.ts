@@ -752,7 +752,10 @@ export function useMissionControlData() {
     async (payload: unknown) => {
       try {
         setIsSaving(true);
-        const result = await importDailyStatePayload(payload as Parameters<typeof importDailyStatePayload>[0]);
+        const result = await importDailyStatePayload(
+          payload as Parameters<typeof importDailyStatePayload>[0],
+          { allowDeletedRestore: true },
+        );
         // After import, roll over any stale "today" tasks (handles import of yesterday's JSON)
         await rolloverStaleTodayTasks();
         await reloadDataAndPushCloud();
