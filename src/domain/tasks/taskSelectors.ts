@@ -8,7 +8,14 @@ export function getSubtasksForTask(taskId: string, subtasks: Subtask[]): Subtask
 }
 
 export function getTodayTasks(tasks: Task[], todayISO: string): Task[] {
-  return tasks.filter((task) => task.bucket === 'today' && task.date === todayISO);
+  // Show all bucket=today tasks due today or earlier (handles import before rollover)
+  return tasks.filter(
+    (task) =>
+      task.bucket === 'today' &&
+      (task.date ?? '') <= todayISO &&
+      task.statusOverride !== 'cancelled' &&
+      !task.completedAt,
+  );
 }
 
 export function getInProgressTasks(tasks: Task[], subtasks: Subtask[]): Task[] {
