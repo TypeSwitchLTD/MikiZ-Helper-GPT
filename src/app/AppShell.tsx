@@ -24,7 +24,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.1";
+const APP_VERSION = "0.8.2";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -315,6 +315,7 @@ export function AppShell() {
   const [isPinAuthenticated, setIsPinAuthenticated] = useState(false);
   const [dailyStateImportStatus, setDailyStateImportStatus] = useState("");
   const dailyStateInputRef = useRef<HTMLInputElement | null>(null);
+  const authInputRef = useRef<HTMLInputElement | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [scrollCompact, setScrollCompact] = useState(false);
@@ -415,6 +416,15 @@ export function AppShell() {
       }
     }
   }, [data.settings?.pinEnabled, data.settings?.pinHash, data.settings?.pinUpdatedAt, data.isLoading]);
+
+  useEffect(() => {
+    if (!data.settings?.pinEnabled || isPinAuthenticated) return;
+    if (authLockout.lockedUntil && Date.now() < authLockout.lockedUntil) return;
+    const timerId = window.setTimeout(() => {
+      authInputRef.current?.focus();
+    }, 120);
+    return () => window.clearTimeout(timerId);
+  }, [data.settings?.pinEnabled, isPinAuthenticated, authLockout.lockedUntil]);
 
   // ─── Lockout countdown timer ──────────────────────────────────────────────────
   useEffect(() => {
@@ -1028,8 +1038,9 @@ export function AppShell() {
               </div>
 
               <input
+                ref={authInputRef}
                 autoFocus
-                type="tel"
+                type="password"
                 autoComplete="one-time-code"
                 enterKeyHint="done"
                 inputMode="numeric"
@@ -1377,7 +1388,7 @@ export function AppShell() {
                   type="button"
                   className={`flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-2xl px-3 text-xs font-black text-white shadow-sm transition active:scale-95 ${morning.isGeneratingVoice || morning.isSpeaking || morning.isMorningLoading ? "bg-rose-500" : "bg-gradient-to-br from-emerald-400 to-cyan-400"}`}
                   title="נאום בוקר"
-                  onClick={() => void morning.openMorningBriefing()}
+                  onClick={() => void morning.speakMorningBriefing()}
                 >
                   {morning.isGeneratingVoice || morning.isMorningLoading ? `${morning.morningPlayProgress}%` : morning.isSpeaking ? "■" : "▶"}
                   <span>נאום</span>
@@ -1615,7 +1626,7 @@ export function AppShell() {
             : "bg-gradient-to-l from-emerald-500 to-cyan-500"
         }`}
         title="נאום בוקר"
-        onClick={() => void morning.openMorningBriefing()}
+        onClick={() => void morning.speakMorningBriefing()}
       >
         <span className="text-base">
           {morning.isGeneratingVoice || morning.isMorningLoading ? `${morning.morningPlayProgress}%` : morning.isSpeaking ? "■" : "▶"}
@@ -1729,7 +1740,7 @@ export function AppShell() {
           locationLabel={data.settings?.location.label ?? ""}
           onSpeakMorningBriefing={() => {
             setReadyCheckOpen(false);
-            void morning.openMorningBriefing();
+            void morning.speakMorningBriefing();
           }}
           onClose={() => setReadyCheckOpen(false)}
         />
