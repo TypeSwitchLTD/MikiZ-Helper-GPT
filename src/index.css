@@ -60,6 +60,13 @@ button:disabled {
   direction: rtl;
 }
 
+.mobile-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
 @layer components {
   .app-tab {
     @apply rounded-2xl px-4 py-2 text-sm font-bold transition;
@@ -114,9 +121,9 @@ button:disabled {
   background: linear-gradient(180deg, #bae6fd, #93c5fd);
 }
 
-.mission-tabs::-webkit-scrollbar {
-  height: 3px;
-}
+  .mission-tabs::-webkit-scrollbar {
+    height: 3px;
+  }
 
 .mission-tabs::-webkit-scrollbar-thumb {
   background: #dbeafe;
@@ -125,9 +132,11 @@ button:disabled {
 
 @media (max-width: 767px) {
   .app-tab {
-    padding: 0.55rem 0.8rem;
-    font-size: 0.78rem;
-    border-radius: 1rem;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.76rem;
+    line-height: 1;
+    border-radius: 0.95rem;
+    white-space: nowrap;
   }
 
   .field-card,
@@ -140,6 +149,11 @@ button:disabled {
   select,
   textarea {
     font-size: 16px;
+  }
+
+  .mission-task-meta {
+    max-height: 1.65rem;
+    overflow: hidden;
   }
 }
 

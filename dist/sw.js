@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mission-control-0-7-6-shell';
+const CACHE_NAME = 'mission-control-0-7-7-shell';
 const SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {

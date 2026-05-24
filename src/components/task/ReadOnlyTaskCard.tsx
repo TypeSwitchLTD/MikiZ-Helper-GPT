@@ -481,7 +481,7 @@ export function ReadOnlyTaskCard({
   return (
     <article
       ref={cardRef}
-      className={`rounded-2xl border p-4 shadow-sm transition hover:shadow-soft ${
+      className={`rounded-2xl border p-3 shadow-sm transition hover:shadow-soft sm:p-4 ${
         isFocused
           ? "border-cyan-300 bg-cyan-50/60 ring-4 ring-cyan-100"
           : isMutedDone
@@ -504,16 +504,16 @@ export function ReadOnlyTaskCard({
         }}
         aria-expanded={isExpanded}
       >
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="rounded-full bg-sky-50 px-2 py-1 font-bold text-sky-700 ring-1 ring-sky-100">
+            <div className="mission-task-meta flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 sm:gap-2 sm:text-xs">
+              <span className="rounded-full bg-sky-50 px-2 py-0.5 font-bold text-sky-700 ring-1 ring-sky-100 sm:py-1">
                 {task.scheduledTimeLabel ?? "ללא שעה"}
               </span>
-              <span>{projectName ?? task.projectId}</span>
-              <span>•</span>
-              <span>{domainName ?? task.domainId}</span>
-              {task.durationLabel ? <span>• {task.durationLabel}</span> : null}
+              <span className="truncate">{projectName ?? task.projectId}</span>
+              <span className="hidden sm:inline">•</span>
+              <span className="hidden sm:inline">{domainName ?? task.domainId}</span>
+              {task.durationLabel ? <span className="hidden sm:inline">• {task.durationLabel}</span> : null}
               {task.movedCount > 0 ? (
                 <span className="font-bold text-amber-700">
                   • הועבר {task.movedCount}
@@ -528,19 +528,19 @@ export function ReadOnlyTaskCard({
                 </span>
               ) : null}
             </div>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="text-lg font-black text-slate-950">
+            <div className="mt-1.5 flex items-start gap-2 sm:mt-2 sm:items-center">
+              <span className="mt-0.5 text-base font-black text-slate-950 sm:mt-0 sm:text-lg">
                 {isExpanded ? "▾" : "▸"}
               </span>
               <h3
-                className={`truncate text-lg font-black ${isMutedDone ? "text-slate-500 line-through" : "text-slate-950"}`}
+                className={`mobile-clamp-2 min-w-0 text-base font-black leading-tight sm:truncate sm:text-lg ${isMutedDone ? "text-slate-500 line-through" : "text-slate-950"}`}
               >
                 {task.title}
               </h3>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] sm:gap-2 sm:text-xs">
             {canReorderFocus && onReorderTaskFocus ? (
               <div
                 className="hidden sm:flex items-center gap-1"
@@ -582,7 +582,7 @@ export function ReadOnlyTaskCard({
               </div>
             ) : null}
             <span
-              className={`rounded-full px-2 py-1 font-bold ring-1 ${getStatusBadgeClass(progress)}`}
+              className={`rounded-full px-2 py-0.5 font-bold ring-1 sm:py-1 ${getStatusBadgeClass(progress)}`}
             >
               {progress.startedCount > 0 &&
               progress.percent === 0 &&
@@ -590,15 +590,15 @@ export function ReadOnlyTaskCard({
                 ? "התחיל · 0%"
                 : statusLabels[progress.status]}
             </span>
-            <span className="rounded-full bg-amber-50 px-2 py-1 font-bold text-amber-700 ring-1 ring-amber-100">
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-700 ring-1 ring-amber-100 sm:py-1">
               {priorityLabels[task.priority]}
             </span>
-            <span className="rounded-full bg-fuchsia-50 px-2 py-1 font-bold text-fuchsia-700 ring-1 ring-fuchsia-100">
+            <span className="rounded-full bg-fuchsia-50 px-2 py-0.5 font-bold text-fuchsia-700 ring-1 ring-fuchsia-100 sm:py-1">
               {effortLabels[task.effort]}
             </span>
             {onChangeSubtaskStatus ? (
               <label
-                className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-800 ring-1 ring-slate-200 transition hover:bg-emerald-50 hover:text-emerald-800 hover:ring-emerald-100"
+                className="flex items-center gap-1.5 rounded-2xl bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-800 ring-1 ring-slate-200 transition hover:bg-emerald-50 hover:text-emerald-800 hover:ring-emerald-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
                 onClick={(event) => event.stopPropagation()}
                 title="סמן סוף משימה"
               >
@@ -616,8 +616,8 @@ export function ReadOnlyTaskCard({
           </div>
         </div>
 
-        <div className="mt-3">
-          <div className="mb-1 flex justify-between text-xs font-bold text-slate-500">
+        <div className="mt-2 sm:mt-3">
+          <div className="mb-1 flex justify-between text-[11px] font-bold text-slate-500 sm:text-xs">
             <span>
               {progress.doneCount}/{progress.totalCount} תתי־משימות הושלמו
               {progress.startedCount > 0 && progress.doneCount === 0
@@ -626,7 +626,7 @@ export function ReadOnlyTaskCard({
             </span>
             <span>{progress.percent}%</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 sm:h-2">
             <div
               className={`h-full rounded-full transition-all ${getProgressFillClass(progress)}`}
               style={{
@@ -638,14 +638,14 @@ export function ReadOnlyTaskCard({
       </div>
 
       {isExpanded ? (
-        <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+        <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 sm:mt-4 sm:space-y-3 sm:pt-4">
           {task.whyNow ? (
-            <p className="rounded-2xl bg-sky-50 px-3 py-2 text-sm text-slate-700">
+            <p className="rounded-2xl bg-sky-50 px-3 py-2 text-xs text-slate-700 sm:text-sm">
               {task.whyNow}
             </p>
           ) : null}
           {task.notes ? (
-            <p className="rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            <p className="rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-600 sm:text-sm">
               {task.notes}
             </p>
           ) : null}
@@ -664,10 +664,10 @@ export function ReadOnlyTaskCard({
               return (
                 <li
                   key={subtask.id}
-                  className="rounded-xl bg-slate-50 px-3 py-2 text-sm ring-1 ring-slate-200"
+                  className="rounded-xl bg-slate-50 px-2.5 py-2 text-sm ring-1 ring-slate-200 sm:px-3"
                 >
-                  <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
-                    <label className="flex items-center gap-2 whitespace-nowrap text-xs font-bold text-slate-700">
+                  <div className="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+                    <label className="flex items-center gap-2 whitespace-nowrap text-[11px] font-bold text-slate-700 sm:text-xs">
                       <input
                         type="checkbox"
                         checked={started}
@@ -685,7 +685,7 @@ export function ReadOnlyTaskCard({
                     <div className="min-w-0">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <input
-                          className={`min-h-10 flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 ${done ? "text-slate-500 line-through" : ""}`}
+                          className={`min-h-9 flex-1 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-900 sm:min-h-10 ${done ? "text-slate-500 line-through" : ""}`}
                           value={editedSubtaskTitles[subtask.id] ?? subtask.title}
                           disabled={isSaving || !onUpdateSubtaskText}
                           onChange={(event) =>
@@ -713,7 +713,7 @@ export function ReadOnlyTaskCard({
                           </button>
                         ) : null}
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
                         {subtask.durationLabel ??
                           (subtask.estimatedDurationMinutes
                             ? `${subtask.estimatedDurationMinutes} דק׳`
@@ -724,7 +724,7 @@ export function ReadOnlyTaskCard({
                           : ""}
                       </p>
                       {subtask.notes ? (
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
                           {subtask.notes}
                         </p>
                       ) : null}
@@ -772,7 +772,7 @@ export function ReadOnlyTaskCard({
               className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200 space-y-3"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button
                   type="button"
                   className={`rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${isTextEditOpen ? "bg-sky-600 text-white ring-sky-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-sky-50 hover:text-sky-800"}`}

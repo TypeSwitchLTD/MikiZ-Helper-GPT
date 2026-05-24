@@ -24,7 +24,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.7.6";
+const APP_VERSION = "0.7.7";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -1224,9 +1224,9 @@ export function AppShell() {
         </aside>
 
         {/* Main content */}
-        <section ref={mainSectionRef} className="mission-scroll min-w-0 px-3 pb-4 pt-0 sm:px-5 lg:px-8 xl:h-screen xl:overflow-y-auto">
+        <section ref={mainSectionRef} className="mission-scroll min-w-0 px-2 pb-4 pt-0 sm:px-5 lg:px-8 xl:h-screen xl:overflow-y-auto">
           <header
-            className={`sticky top-0 z-30 -mx-3 mb-4 border-b px-3 backdrop-blur-xl transition-[padding] duration-200 sm:-mx-5 sm:px-5 lg:-mx-8 lg:px-8 ${scrollCompact ? "py-1.5" : "py-2"} ${theme.headerBg} ${theme.headerBorder}`}
+            className={`sticky top-0 z-30 -mx-2 mb-3 border-b px-2 backdrop-blur-xl transition-[padding] duration-200 sm:-mx-5 sm:mb-4 sm:px-5 lg:-mx-8 lg:px-8 ${scrollCompact ? "py-1.5" : "py-2"} ${theme.headerBg} ${theme.headerBorder}`}
           >
             {/* ── Desktop header expanded (CSS-only toggle, no remount) ──── */}
             <div className={`mx-auto max-w-[1220px] gap-3 ${scrollCompact ? "hidden" : "hidden lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"}`}>
@@ -1385,7 +1385,7 @@ export function AppShell() {
             ) : null}
 
             {/* Mobile nav tabs */}
-            <nav className="mt-2 flex gap-1.5 overflow-x-auto pb-1 xl:hidden" aria-label="Mission Control tabs mobile">
+            <nav className="mission-tabs -mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-1 xl:hidden" aria-label="Mission Control tabs mobile">
               {appTabs.map((tab) => (
                 <button key={tab.id} type="button" className={`app-tab shrink-0 ${activeTab === tab.id ? theme.navActive : theme.navIdle}`} onClick={() => setActiveTab(tab.id)}>
                   {tab.label}
@@ -1456,7 +1456,7 @@ export function AppShell() {
             </>
           ) : null}
 
-          <div className="mx-auto max-w-[1220px] space-y-4 pb-28">
+          <div className="mx-auto max-w-[1220px] space-y-3 pb-28 sm:space-y-4">
             {data.error ? (
               <section className="rounded-3xl bg-red-50 p-5 text-red-900 ring-1 ring-red-200">
                 <h2 className="font-bold">שגיאה בטעינת IndexedDB</h2>

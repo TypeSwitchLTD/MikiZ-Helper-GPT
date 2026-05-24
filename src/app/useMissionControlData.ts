@@ -39,7 +39,7 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.7.6-sync-hardening';
+const CLIENT_APP_VERSION = '0.7.7-mobile-polish';
 
 interface MissionControlData {
   tasks: Task[];

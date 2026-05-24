@@ -45,20 +45,20 @@ export function ReminderToast({
 
   return (
     <div
-      className="fixed bottom-32 left-1/2 z-[75] flex w-full max-w-[22rem] -translate-x-1/2 flex-col gap-2.5 px-3"
+      className="fixed inset-x-2 bottom-20 z-[75] flex max-h-[48dvh] flex-col gap-2 overflow-y-auto sm:inset-x-auto sm:bottom-32 sm:left-1/2 sm:w-full sm:max-w-[22rem] sm:-translate-x-1/2 sm:gap-2.5 sm:px-3"
       role="region"
       aria-label="תזכורות פעילות"
     >
-      {dueReminders.slice(0, 3).map((reminder) => {
+      {dueReminders.slice(0, 2).map((reminder) => {
         const linkedTask = reminder.taskId ? tasks.find((t) => t.id === reminder.taskId) : undefined;
 
         return (
           <div
             key={reminder.id}
-            className="overflow-hidden rounded-3xl bg-amber-50 shadow-2xl ring-1 ring-amber-200"
+            className="overflow-hidden rounded-2xl bg-amber-50 shadow-2xl ring-1 ring-amber-200 sm:rounded-3xl"
           >
             {/* Coloured top strip */}
-            <div className="bg-amber-400 px-4 py-2 flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 bg-amber-400 px-3 py-1.5 sm:px-4 sm:py-2">
               <div className="flex items-center gap-1.5">
                 <span className="text-base">🔔</span>
                 <span className="text-xs font-black text-amber-950">תזכורת</span>
@@ -69,8 +69,8 @@ export function ReminderToast({
             </div>
 
             {/* Body */}
-            <div className="px-4 pt-3 pb-2">
-              <p className="text-sm font-black text-slate-950 leading-snug">{reminder.title}</p>
+            <div className="px-3 pb-2 pt-2 sm:px-4 sm:pt-3">
+              <p className="mobile-clamp-2 text-sm font-black leading-snug text-slate-950">{reminder.title}</p>
               {reminder.note ? (
                 <p className="mt-0.5 text-xs font-medium text-slate-600">{reminder.note}</p>
               ) : null}
@@ -92,31 +92,31 @@ export function ReminderToast({
             </div>
 
             {/* Actions */}
-            <div className="flex flex-wrap gap-1.5 px-4 pb-3 pt-1">
+            <div className="grid grid-cols-4 gap-1.5 px-3 pb-2 pt-1 sm:flex sm:flex-wrap sm:px-4 sm:pb-3">
               <button
                 type="button"
-                className="rounded-2xl bg-emerald-500 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600"
+                className="rounded-2xl bg-emerald-500 px-2 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600 sm:px-3"
                 onClick={() => onMarkDone(reminder.id)}
               >
                 ✓ סיים
               </button>
               <button
                 type="button"
-                className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-200 transition hover:bg-amber-50"
+                className="rounded-2xl bg-white px-2 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-200 transition hover:bg-amber-50 sm:px-3"
                 onClick={() => onSnooze(reminder.id, 10)}
               >
                 10 דק׳
               </button>
               <button
                 type="button"
-                className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-200 transition hover:bg-amber-50"
+                className="rounded-2xl bg-white px-2 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-200 transition hover:bg-amber-50 sm:px-3"
                 onClick={() => onSnooze(reminder.id, 60)}
               >
                 שעה
               </button>
               <button
                 type="button"
-                className="rounded-2xl bg-amber-100 px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-amber-200"
+                className="rounded-2xl bg-amber-100 px-2 py-2 text-xs font-bold text-slate-600 transition hover:bg-amber-200 sm:px-3"
                 onClick={() => onDismiss(reminder.id)}
               >
                 דחה

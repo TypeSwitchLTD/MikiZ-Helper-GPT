@@ -416,25 +416,25 @@ export function TasksHubTab({
         .join(" + ");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3 sm:space-y-5">
       {recommendedTask ? (
-        <section className="rounded-[2rem] bg-white p-5 shadow-soft ring-1 ring-sky-100">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
-            <div>
+        <section className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-sky-100 sm:rounded-[2rem] sm:p-5 sm:shadow-soft">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:gap-4">
+            <div className="min-w-0">
               <p className="text-xs font-black text-emerald-700">
                 הפעולה הבאה המומלצת
               </p>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+              <h2 className="mobile-clamp-2 mt-1 text-lg font-black leading-tight tracking-tight text-slate-950 sm:text-3xl">
                 {recommendedTask.title}
               </h2>
-              <p className="mt-2 max-w-3xl text-sm font-bold text-slate-500">
+              <p className="mt-2 hidden max-w-3xl text-sm font-bold text-slate-500 sm:block">
                 {recommendedTask.whyNow ||
                   "פתח את הכרטיס ותתקדם בצעד הבא בלבד."}
               </p>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2 sm:mt-4">
                 <button
                   type="button"
-                  className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white"
+                  className="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white sm:px-4 sm:text-sm"
                   onClick={() =>
                     document
                       .getElementById(`task-${recommendedTask.id}`)
@@ -445,7 +445,7 @@ export function TasksHubTab({
                 </button>
                 <button
                   type="button"
-                  className="rounded-2xl bg-sky-50 px-4 py-2 text-sm font-black text-sky-800 ring-1 ring-sky-100"
+                  className="rounded-2xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-800 ring-1 ring-sky-100 sm:px-4 sm:text-sm"
                   onClick={toggleQuietMode}
                 >
                   {quietMode ? "כבה מצב שקט" : "מצב שקט"}
@@ -453,7 +453,7 @@ export function TasksHubTab({
               </div>
             </div>
             <div
-              className="grid h-32 w-32 place-items-center rounded-full bg-[conic-gradient(#22c55e_var(--progress),#e2e8f0_0)] p-2"
+              className="grid h-20 w-20 place-items-center rounded-full bg-[conic-gradient(#22c55e_var(--progress),#e2e8f0_0)] p-1.5 sm:h-32 sm:w-32 sm:p-2"
               style={
                 {
                   "--progress": `${getTaskProgress(recommendedTask, subtasks).percent}%`,
@@ -462,10 +462,10 @@ export function TasksHubTab({
             >
               <div className="grid h-full w-full place-items-center rounded-full bg-white text-center">
                 <div>
-                  <p className="text-3xl font-black">
+                  <p className="text-xl font-black sm:text-3xl">
                     {getTaskProgress(recommendedTask, subtasks).percent}%
                   </p>
-                  <p className="text-xs font-black text-slate-500">במשימה</p>
+                  <p className="text-[10px] font-black text-slate-500 sm:text-xs">במשימה</p>
                 </div>
               </div>
             </div>
@@ -474,19 +474,19 @@ export function TasksHubTab({
       ) : null}
 
       {!quietMode ? (
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="mission-chip-strip -mx-3 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4">
           {nextTasks.map((task) => (
             <button
               key={task.id}
               type="button"
-              className="rounded-3xl bg-white p-4 text-right shadow-sm ring-1 ring-sky-100 transition hover:-translate-y-0.5 hover:bg-sky-50"
+              className="min-w-[14rem] rounded-2xl bg-white p-3 text-right shadow-sm ring-1 ring-sky-100 transition hover:-translate-y-0.5 hover:bg-sky-50 sm:min-w-0 sm:rounded-3xl sm:p-4"
               onClick={() =>
                 document
                   .getElementById(`task-${task.id}`)
                   ?.scrollIntoView({ behavior: "smooth", block: "center" })
               }
             >
-              <span className="text-xs font-black text-sky-700">הבא בתור</span>
+              <span className="text-[11px] font-black text-sky-700 sm:text-xs">הבא בתור</span>
               <span className="mt-1 block truncate text-sm font-black text-slate-950">
                 {task.title}
               </span>
@@ -503,7 +503,7 @@ export function TasksHubTab({
           <div className="relative">
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-3 rounded-3xl bg-white px-4 py-3 text-right text-sm font-black text-slate-900 ring-1 ring-slate-200 shadow-sm transition hover:bg-sky-50"
+              className="flex w-full items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2.5 text-right text-xs font-black text-slate-900 ring-1 ring-slate-200 shadow-sm transition hover:bg-sky-50 sm:rounded-3xl sm:px-4 sm:py-3 sm:text-sm"
               onClick={() => setFiltersOpen((current) => !current)}
               aria-expanded={filtersOpen}
             >
@@ -591,7 +591,7 @@ export function TasksHubTab({
             ).map(({ groupId, tasks: groupTasks_ }) => {
               const meta = TASK_GROUP_META[groupId] ?? TASK_GROUP_META.backlog;
               return (
-                <div key={groupId} className={`space-y-3 border-r-4 pr-3 ${meta.borderColor}`}>
+                <div key={groupId} className={`space-y-2 border-r-4 pr-2 sm:space-y-3 sm:pr-3 ${meta.borderColor}`}>
                   <div className="flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full ${meta.dotColor}`} />
                     <p className={`text-xs font-black uppercase tracking-wide ${meta.headerColor}`}>
@@ -607,9 +607,9 @@ export function TasksHubTab({
                       <div
                         id={`task-${task.id}`}
                         key={task.id}
-                        className="scroll-mt-32 grid gap-2 md:grid-cols-[44px_minmax(0,1fr)] md:items-start"
+                        className="scroll-mt-28 grid grid-cols-[32px_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[44px_minmax(0,1fr)]"
                       >
-                        <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-950 text-sm font-black text-white shadow-sm md:mt-4">
+                        <div className="mt-3 grid h-8 w-8 place-items-center rounded-full bg-slate-950 text-xs font-black text-white shadow-sm sm:h-10 sm:w-10 sm:text-sm">
                           {index + 1}
                         </div>
                         <ReadOnlyTaskCard
@@ -651,9 +651,9 @@ export function TasksHubTab({
               <div
                 id={`task-${task.id}`}
                 key={task.id}
-                className="scroll-mt-32 grid gap-2 md:grid-cols-[44px_minmax(0,1fr)] md:items-start"
+                className="scroll-mt-28 grid grid-cols-[32px_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[44px_minmax(0,1fr)]"
               >
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-950 text-sm font-black text-white shadow-sm md:mt-4">
+                <div className="mt-3 grid h-8 w-8 place-items-center rounded-full bg-slate-950 text-xs font-black text-white shadow-sm sm:h-10 sm:w-10 sm:text-sm">
                   {index + 1}
                 </div>
                 <ReadOnlyTaskCard
