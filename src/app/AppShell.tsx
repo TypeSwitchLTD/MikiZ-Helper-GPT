@@ -24,7 +24,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.7.8";
+const APP_VERSION = "0.7.9";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -877,6 +877,8 @@ export function AppShell() {
             recurringDefinitions={data.recurringDefinitions}
             tasks={data.tasks}
             onAddRecurringToToday={data.addRecurringToToday}
+            onClearRecurringDefinitions={data.clearRecurringDefinitions}
+            onImportRecurringDefinitions={data.importRecurringDefinitions}
             reminders={data.reminders}
             settings={data.settings}
             todayISO={data.todayISO}

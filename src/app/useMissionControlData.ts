@@ -4,6 +4,7 @@ import { hasCloudSyncToken, pullCloudSyncPayload, pushCloudSyncPayload, type Clo
 import { db } from '../db/db';
 import type { DailyPlan, DailyPlanBlock } from '../domain/dailyPlans/dailyPlanTypes';
 import type { LogEvent } from '../domain/logs/logTypes';
+import { replaceRecurringDefinitionsFromTaskImport, softDeleteAllRecurringDefinitions } from '../domain/recurring/recurringMutations';
 import type { RecurringTaskDefinition } from '../domain/recurring/recurringTypes';
 import type { DailyReportImportTaskDraft } from '../domain/import/dailyReportImport';
 import type { DailyReport } from '../domain/reports/reportTypes';
@@ -39,7 +40,7 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.7.8-mobile-entry';
+const CLIENT_APP_VERSION = '0.7.9-recurring-import';
 
 interface MissionControlData {
   tasks: Task[];
@@ -690,6 +691,37 @@ export function useMissionControlData() {
     [reloadDataAndPushCloud],
   );
 
+  const clearRecurringDefinitions = useCallback(async () => {
+    try {
+      setIsSaving(true);
+      const count = await softDeleteAllRecurringDefinitions();
+      await reloadDataAndPushCloud();
+      return count;
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unknown recurring clear error');
+      throw saveError;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [reloadDataAndPushCloud]);
+
+  const importRecurringDefinitions = useCallback(
+    async (payload: unknown) => {
+      try {
+        setIsSaving(true);
+        const count = await replaceRecurringDefinitionsFromTaskImport(payload);
+        await reloadDataAndPushCloud();
+        return count;
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Unknown recurring import error');
+        throw saveError;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
 
 
   const saveDailyPlan = useCallback(
@@ -800,7 +832,7 @@ export function useMissionControlData() {
         inProgressCount: inProgressTasks.length,
         backlogCount: backlogTasks.length,
         doneCount: doneTasks.length,
-        recurringCount: data.recurringDefinitions.length,
+        recurringCount: data.recurringDefinitions.filter((definition) => definition.isActive && !definition.deletedAt).length,
       },
     };
   }, [data, todayISO]);
@@ -832,6 +864,8 @@ export function useMissionControlData() {
     snoozeExistingReminder,
     dismissReminder,
     addRecurringToToday,
+    clearRecurringDefinitions,
+    importRecurringDefinitions,
     importReportTasks,
     deleteLastImport,
     importDailyState,

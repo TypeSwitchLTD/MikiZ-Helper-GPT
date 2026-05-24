@@ -23,6 +23,7 @@ export interface RecurringTaskDefinition {
     sortOrder: number;
   }>;
   isActive: boolean;
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   lastGeneratedAt?: string | null;

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { SectionCard } from '../../components/layout/SectionCard';
 import type { RecurringTaskDefinition } from '../../domain/recurring/recurringTypes';
 import { buildRecurringViewModels, getRecurringStateLabel } from '../../domain/recurring/recurringSchedule';
@@ -13,6 +13,8 @@ interface RecurringTabProps {
   todayISO: string;
   isSaving?: boolean;
   onAddToToday: (definitionId: string) => Promise<void> | void;
+  onClearAll?: () => Promise<number>;
+  onImportFromJson?: (payload: unknown) => Promise<number>;
 }
 
 const stateBadgeClasses = {
@@ -22,7 +24,18 @@ const stateBadgeClasses = {
   not_due_today: 'bg-slate-50 text-slate-600 ring-slate-200',
 } as const;
 
-export function RecurringTab({ recurringDefinitions, tasks, settings, todayISO, isSaving, onAddToToday }: RecurringTabProps) {
+export function RecurringTab({
+  recurringDefinitions,
+  tasks,
+  settings,
+  todayISO,
+  isSaving,
+  onAddToToday,
+  onClearAll,
+  onImportFromJson,
+}: RecurringTabProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [status, setStatus] = useState('');
   const viewModels = useMemo(
     () => buildRecurringViewModels(recurringDefinitions, tasks, todayISO),
     [recurringDefinitions, tasks, todayISO],
@@ -30,6 +43,29 @@ export function RecurringTab({ recurringDefinitions, tasks, settings, todayISO, 
 
   const dueCount = viewModels.filter((item) => item.state === 'due_today').length;
   const missedCount = viewModels.filter((item) => item.state === 'missed').length;
+
+  const handleClearAll = async () => {
+    if (!onClearAll) return;
+    const ok = window.confirm('למחוק את כל הגדרות המשימות החוזרות הישנות? המשימות הרגילות לא יימחקו.');
+    if (!ok) return;
+    setStatus('מוחק הגדרות חוזרות...');
+    const count = await onClearAll();
+    setStatus(`נמחקו ${count} הגדרות חוזרות וסונכרן לענן.`);
+  };
+
+  const handleImportFile = async (file: File | null) => {
+    if (!file || !onImportFromJson) return;
+    setStatus('קורא וממיר קובץ חוזרות...');
+    try {
+      const payload = JSON.parse(await file.text());
+      const count = await onImportFromJson(payload);
+      setStatus(`יובאו ${count} הגדרות חוזרות חדשות וסונכרנו לענן.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'ייבוא החוזרות נכשל.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -53,7 +89,43 @@ export function RecurringTab({ recurringDefinitions, tasks, settings, todayISO, 
         </div>
       </SectionCard>
 
-      <SectionCard title="הגדרות חוזרות" description="לחיצה על הוספה להיום יוצרת מופע משימה רגיל עם תתי־משימות ב־Today.">
+      <SectionCard
+        title="הגדרות חוזרות"
+        description="לחיצה על הוספה להיום יוצרת מופע משימה רגיל עם תתי־משימות ב־Today."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => void handleImportFile(event.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              disabled={isSaving || !onImportFromJson}
+              className="rounded-2xl bg-emerald-600 px-3 py-2 text-xs font-black text-white transition hover:bg-emerald-700 disabled:opacity-50"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              איפוס וייבוא JSON
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || !onClearAll || viewModels.length === 0}
+              className="rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100 transition hover:bg-rose-100 disabled:opacity-50"
+              onClick={() => void handleClearAll()}
+            >
+              מחק חוזרות
+            </button>
+          </div>
+        }
+      >
+        {status ? (
+          <p className="mb-3 rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 ring-1 ring-emerald-100">
+            {status}
+          </p>
+        ) : null}
+
         {viewModels.length === 0 ? (
           <p className="text-sm text-slate-500">אין הגדרות חוזרות פעילות.</p>
         ) : (

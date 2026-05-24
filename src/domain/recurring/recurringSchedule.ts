@@ -50,7 +50,7 @@ export function buildRecurringViewModels(
   todayISO: string,
 ): RecurringDefinitionViewModel[] {
   return definitions
-    .filter((definition) => definition.isActive)
+    .filter((definition) => definition.isActive && !definition.deletedAt)
     .map((definition) => {
       const alreadyAddedToday = tasks.some(
         (task) =>

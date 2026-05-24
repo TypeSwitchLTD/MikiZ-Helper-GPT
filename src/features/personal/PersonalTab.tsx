@@ -18,6 +18,8 @@ interface PersonalTabProps {
   recurringDefinitions: RecurringTaskDefinition[];
   tasks: Task[];
   onAddRecurringToToday: (definitionId: string) => Promise<void>;
+  onClearRecurringDefinitions: () => Promise<number>;
+  onImportRecurringDefinitions: (payload: unknown) => Promise<number>;
   reminders: Reminder[];
   settings: AppSettings | null;
   todayISO: string;
@@ -27,7 +29,7 @@ interface PersonalTabProps {
 export function PersonalTab({
   habits, habitLogs,
   onAddHabit, onEditHabit, onDeleteHabit, onNudgeHabit,
-  recurringDefinitions, tasks, onAddRecurringToToday,
+  recurringDefinitions, tasks, onAddRecurringToToday, onClearRecurringDefinitions, onImportRecurringDefinitions,
   reminders, settings, todayISO, isSaving,
 }: PersonalTabProps) {
   const pendingReminders = reminders
@@ -55,6 +57,8 @@ export function PersonalTab({
         todayISO={todayISO}
         isSaving={isSaving}
         onAddToToday={onAddRecurringToToday}
+        onClearAll={onClearRecurringDefinitions}
+        onImportFromJson={onImportRecurringDefinitions}
       />
 
       {pendingReminders.length > 0 && (
