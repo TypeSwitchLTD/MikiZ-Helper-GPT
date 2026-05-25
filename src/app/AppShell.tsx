@@ -30,6 +30,8 @@ const APP_VERSION = "0.8.2";
 const LOCKOUT_KEY = "mission-control-auth-lockout";
 const AUTH_OK_KEY = "mission-control-auth-ok";
 const AUTH_PIN_VERSION_KEY = "mission-control-auth-pin-version";
+const AUTH_UNTIL_KEY = "mission-control-auth-ok-until";
+const AUTH_DURATION_MS = 4 * 60 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -48,6 +50,38 @@ function writeLockout(s: LockoutState) {
 function getAuthPinVersion(settings: AppSettings | null | undefined): string {
   if (!settings?.pinEnabled) return "disabled";
   return settings.pinUpdatedAt || settings.pinHash || "enabled-without-pin-hash";
+}
+
+function setAuthSession(settings: AppSettings | null | undefined): void {
+  const pinVersion = getAuthPinVersion(settings);
+  const authUntil = String(Date.now() + AUTH_DURATION_MS);
+  sessionStorage.setItem(AUTH_OK_KEY, "true");
+  sessionStorage.setItem(AUTH_PIN_VERSION_KEY, pinVersion);
+  localStorage.setItem(AUTH_OK_KEY, "true");
+  localStorage.setItem(AUTH_PIN_VERSION_KEY, pinVersion);
+  localStorage.setItem(AUTH_UNTIL_KEY, authUntil);
+}
+
+function clearAuthSession(): void {
+  sessionStorage.removeItem(AUTH_OK_KEY);
+  sessionStorage.removeItem(AUTH_PIN_VERSION_KEY);
+  localStorage.removeItem(AUTH_OK_KEY);
+  localStorage.removeItem(AUTH_PIN_VERSION_KEY);
+  localStorage.removeItem(AUTH_UNTIL_KEY);
+}
+
+function hasValidAuthSession(settings: AppSettings | null | undefined): boolean {
+  const pinVersion = getAuthPinVersion(settings);
+  const sessionOk =
+    sessionStorage.getItem(AUTH_OK_KEY) === "true" &&
+    sessionStorage.getItem(AUTH_PIN_VERSION_KEY) === pinVersion;
+  if (sessionOk) return true;
+
+  const localOk =
+    localStorage.getItem(AUTH_OK_KEY) === "true" &&
+    localStorage.getItem(AUTH_PIN_VERSION_KEY) === pinVersion;
+  const authUntil = Number(localStorage.getItem(AUTH_UNTIL_KEY) || "0");
+  return localOk && Number.isFinite(authUntil) && authUntil > Date.now();
 }
 
 // ─── Color theme config ───────────────────────────────────────────────────────
@@ -398,20 +432,16 @@ export function AppShell() {
   // which would grant access immediately, bypassing auth on every new device.
   useEffect(() => {
     if (data.isLoading) return; // don't decide until real settings are loaded
-    const pinVersion = getAuthPinVersion(data.settings);
     if (!data.settings?.pinEnabled) {
-      sessionStorage.setItem(AUTH_OK_KEY, "true");
-      sessionStorage.setItem(AUTH_PIN_VERSION_KEY, pinVersion);
+      setAuthSession(data.settings);
       setIsPinAuthenticated(true);
     } else {
       // PIN is enabled - only allow through if this session matches the current PIN version.
-      const sessionOk = sessionStorage.getItem(AUTH_OK_KEY) === "true";
-      const sessionVersionOk = sessionStorage.getItem(AUTH_PIN_VERSION_KEY) === pinVersion;
-      if (sessionOk && sessionVersionOk) {
+      if (hasValidAuthSession(data.settings)) {
+        setAuthSession(data.settings);
         setIsPinAuthenticated(true);
       } else {
-        sessionStorage.removeItem(AUTH_OK_KEY);
-        sessionStorage.removeItem(AUTH_PIN_VERSION_KEY);
+        clearAuthSession();
         setIsPinAuthenticated(false);
       }
     }
@@ -465,8 +495,7 @@ export function AppShell() {
       const cleared: LockoutState = { attempts: 0, lockedUntil: null };
       setAuthLockout(cleared);
       writeLockout(cleared);
-      sessionStorage.setItem(AUTH_OK_KEY, "true");
-      sessionStorage.setItem(AUTH_PIN_VERSION_KEY, getAuthPinVersion(data.settings));
+      setAuthSession(data.settings);
       setIsPinAuthenticated(true);
       setAuthPin("");
       return;
@@ -498,8 +527,7 @@ export function AppShell() {
     const ok = await verifyBiometric(credId);
     setIsBiometricLoading(false);
     if (ok) {
-      sessionStorage.setItem(AUTH_OK_KEY, "true");
-      sessionStorage.setItem(AUTH_PIN_VERSION_KEY, getAuthPinVersion(data.settings));
+      setAuthSession(data.settings);
       setIsPinAuthenticated(true);
     } else {
       setAuthError("זיהוי ביומטרי נכשל — הכנס PIN.");
@@ -572,7 +600,7 @@ export function AppShell() {
       setFocusSeconds((current) => {
         if (current <= 1) {
           setFocusRunning(false);
-          setFocusEndToast("זמן פוקוס הסתיים. קח הפסקה, תזוז, תשתה מים.");
+          setFocusEndToast("הפסקה. הטיימר הסתיים, קח רגע לנשום.");
           try {
             const AC =
               window.AudioContext ||
@@ -580,21 +608,23 @@ export function AppShell() {
             if (AC) {
               const ctx = new AC();
               const scheduleNotes = () => {
-                [659.25, 830.61, 987.77].forEach((freq, i) => {
-                  const osc = ctx.createOscillator();
-                  const gain = ctx.createGain();
-                  osc.type = "sine";
-                  osc.frequency.value = freq;
-                  const t = ctx.currentTime + i * 0.16;
-                  gain.gain.setValueAtTime(0, t);
-                  gain.gain.linearRampToValueAtTime(0.13, t + 0.025);
-                  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
-                  osc.connect(gain);
-                  gain.connect(ctx.destination);
-                  osc.start(t);
-                  osc.stop(t + 0.5);
+                [0, 0.85, 1.7].forEach((repeatOffset) => {
+                  [659.25, 830.61, 987.77].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = "sine";
+                    osc.frequency.value = freq;
+                    const t = ctx.currentTime + repeatOffset + i * 0.16;
+                    gain.gain.setValueAtTime(0, t);
+                    gain.gain.linearRampToValueAtTime(0.12, t + 0.025);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(t);
+                    osc.stop(t + 0.5);
+                  });
                 });
-                window.setTimeout(() => void ctx.close(), 1400);
+                window.setTimeout(() => void ctx.close(), 3400);
               };
               ctx.state === "suspended"
                 ? void ctx.resume().then(scheduleNotes)
@@ -606,13 +636,23 @@ export function AppShell() {
           if ("Notification" in window && Notification.permission === "granted") {
             void navigator.serviceWorker?.ready
               .then((reg) =>
-                reg.showNotification("Mission Control", {
-                  body: "זמן פוקוס הסתיים. קח הפסקה קצרה.",
+                reg.showNotification("הפסקה", {
+                  body: "הטיימר הסתיים. קח הפסקה קצרה.",
                   tag: "focus-timer",
-                  silent: true,
+                  silent: false,
                 }),
               )
-              .catch(() => undefined);
+              .catch(() => {
+                try {
+                  new Notification("הפסקה", {
+                    body: "הטיימר הסתיים. קח הפסקה קצרה.",
+                    tag: "focus-timer",
+                    silent: false,
+                  });
+                } catch {
+                  /* best-effort */
+                }
+              });
           }
           return 5 * 60;
         }
@@ -621,6 +661,8 @@ export function AppShell() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [focusRunning]);
+
+  const focusTimerLabel = `${Math.floor(focusSeconds / 60).toString().padStart(2, "0")}:${(focusSeconds % 60).toString().padStart(2, "0")}`;
 
   // ─── Derived counts ───────────────────────────────────────────────────────────
   const pendingReminders = useMemo(
@@ -1777,6 +1819,19 @@ export function AppShell() {
             </button>
           </section>
         </div>
+      ) : null}
+
+      {focusRunning && !focusTimerOpen ? (
+        <button
+          type="button"
+          className="fixed top-3 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-2xl ring-2 ring-white/90"
+          onClick={() => setFocusTimerOpen(true)}
+          aria-label="פתח טיימר פוקוס"
+        >
+          <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+          <span>פוקוס</span>
+          <span className="tabular-nums">{focusTimerLabel}</span>
+        </button>
       ) : null}
 
       {focusTimerOpen ? (

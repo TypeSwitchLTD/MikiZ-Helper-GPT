@@ -1,8 +1,10 @@
 import type { SpeechInputLanguage } from '../createTaskTypes';
+import type { KeyboardEvent } from 'react';
 
 interface IntakePanelProps {
   rawIntake: string;
   onRawIntakeChange: (value: string) => void;
+  onRawIntakeKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   isSpeechInputActive: boolean;
   speechInputStatus: string;
   speechInputLanguage: SpeechInputLanguage;
@@ -14,6 +16,7 @@ interface IntakePanelProps {
 export function IntakePanel({
   rawIntake,
   onRawIntakeChange,
+  onRawIntakeKeyDown,
   isSpeechInputActive,
   speechInputStatus,
   speechInputLanguage,
@@ -70,6 +73,7 @@ export function IntakePanel({
           rows={4}
           value={rawIntake}
           onChange={(e) => onRawIntakeChange(e.target.value)}
+          onKeyDown={onRawIntakeKeyDown}
           placeholder={
             'לדוגמה:\nלהתקשר למשה מחר ב-16:00\nלבדוק אם Jack שלח timeline\nלהכין פוסט קצר על TimerAligner'
           }

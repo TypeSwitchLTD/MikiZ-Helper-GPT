@@ -393,6 +393,11 @@ export function TasksHubTab({
   const toggleQuietMode = onToggleQuietMode ?? (() => setLocalQuietMode((current) => !current));
   const recommendedTask = visibleTasks[0] ?? null;
   const nextTasks = visibleTasks.slice(1, 5);
+  const recommendedProgress = recommendedTask ? getTaskProgress(recommendedTask, subtasks) : null;
+  const recommendedIsDone =
+    Boolean(recommendedProgress) &&
+    (recommendedProgress?.status === "done" || (recommendedProgress?.percent ?? 0) >= 100);
+  const firstNextTask = nextTasks[0] ?? null;
 
   const toggleFilter = (filter: TaskFilterId) => {
     setActiveFilters((current) => {
@@ -450,20 +455,38 @@ export function TasksHubTab({
                 >
                   {quietMode ? "כבה מצב שקט" : "מצב שקט"}
                 </button>
+                {recommendedIsDone && firstNextTask ? (
+                  <button
+                    type="button"
+                    className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 ring-1 ring-emerald-100 sm:px-4 sm:text-sm"
+                    onClick={() => {
+                      if (quietMode) toggleQuietMode();
+                      window.setTimeout(
+                        () =>
+                          document
+                            .getElementById(`task-${firstNextTask.id}`)
+                            ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+                        quietMode ? 80 : 0,
+                      );
+                    }}
+                  >
+                    הבא בתור
+                  </button>
+                ) : null}
               </div>
             </div>
             <div
               className="grid h-16 w-16 place-items-center rounded-full bg-[conic-gradient(#22c55e_var(--progress),#e2e8f0_0)] p-1 sm:h-32 sm:w-32 sm:p-2"
               style={
                 {
-                  "--progress": `${getTaskProgress(recommendedTask, subtasks).percent}%`,
+                  "--progress": `${recommendedProgress?.percent ?? 0}%`,
                 } as React.CSSProperties
               }
             >
               <div className="grid h-full w-full place-items-center rounded-full bg-white text-center">
                 <div>
                   <p className="text-lg font-black sm:text-3xl">
-                    {getTaskProgress(recommendedTask, subtasks).percent}%
+                    {recommendedProgress?.percent ?? 0}%
                   </p>
                   <p className="text-[10px] font-black text-slate-500 sm:text-xs">במשימה</p>
                 </div>

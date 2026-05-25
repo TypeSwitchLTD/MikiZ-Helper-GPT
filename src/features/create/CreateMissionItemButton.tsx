@@ -51,6 +51,41 @@ interface CreateMissionItemButtonProps {
   onOpenReminder?: () => void;
 }
 
+const INTAKE_HISTORY_KEY = 'mission-control-intake-history';
+const INTAKE_HISTORY_TTL_MS = 60 * 60 * 1000;
+const INTAKE_HISTORY_LIMIT = 20;
+
+interface IntakeHistoryEntry {
+  text: string;
+  savedAt: number;
+}
+
+function readIntakeHistory(): IntakeHistoryEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(INTAKE_HISTORY_KEY) || '[]') as IntakeHistoryEntry[];
+    const cutoff = Date.now() - INTAKE_HISTORY_TTL_MS;
+    return parsed
+      .filter((entry) => entry.text?.trim() && entry.savedAt >= cutoff)
+      .sort((a, b) => b.savedAt - a.savedAt)
+      .slice(0, INTAKE_HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function writeIntakeHistory(entries: IntakeHistoryEntry[]): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(INTAKE_HISTORY_KEY, JSON.stringify(entries.slice(0, INTAKE_HISTORY_LIMIT)));
+}
+
+function saveIntakeHistoryEntry(text: string): void {
+  const clean = text.trim();
+  if (!clean) return;
+  const current = readIntakeHistory().filter((entry) => entry.text.trim() !== clean);
+  writeIntakeHistory([{ text: clean, savedAt: Date.now() }, ...current]);
+}
+
 export function CreateMissionItemButton({
   settings,
   todayISO,
@@ -74,6 +109,7 @@ export function CreateMissionItemButton({
   const [duplicateCandidate, setDuplicateCandidate] = useState<DuplicateCandidate | null>(null);
   const [scheduleRowId, setScheduleRowId] = useState<string | null>(null);
   const [scheduleSubtaskIndex, setScheduleSubtaskIndex] = useState<number | null>(null);
+  const [intakeHistoryIndex, setIntakeHistoryIndex] = useState(-1);
 
   // ─── Speech state ────────────────────────────────────────────────────────────
   const [speechInputLanguage, setSpeechInputLanguage] = useState<SpeechInputLanguage>('he-IL');
@@ -81,6 +117,7 @@ export function CreateMissionItemButton({
   const [speechInputStatus, setSpeechInputStatus] = useState('');
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speechBaseTextRef = useRef('');
+  const speechFinalTextRef = useRef('');
 
   // ─── Derived ─────────────────────────────────────────────────────────────────
   const activeProjects = useMemo(() => settings?.projects.filter((p) => p.isActive) ?? [], [settings]);
@@ -101,6 +138,7 @@ export function CreateMissionItemButton({
     setStatusMessage('');
     setErrorMessage('');
     setDuplicateCandidate(null);
+    setIntakeHistoryIndex(-1);
   };
 
   const closePanel = () => {
@@ -111,6 +149,7 @@ export function CreateMissionItemButton({
     setErrorMessage('');
     setDuplicateCandidate(null);
     setReviewRows([]);
+    setIntakeHistoryIndex(-1);
   };
 
   // ─── Task draft handlers ─────────────────────────────────────────────────────
@@ -118,6 +157,25 @@ export function CreateMissionItemButton({
     setTaskDraft((current) => ({ ...current, [key]: value }));
     setErrorMessage('');
     setDuplicateCandidate(null);
+  };
+
+  const updateRawIntake = (value: string) => {
+    updateTaskDraft('rawIntake', value);
+    setIntakeHistoryIndex(-1);
+  };
+
+  const handleRawIntakeKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'ArrowUp') return;
+    const history = readIntakeHistory();
+    if (!history.length) return;
+    event.preventDefault();
+    const nextIndex = Math.min(intakeHistoryIndex + 1, history.length - 1);
+    const entry = history[nextIndex];
+    if (!entry) return;
+    setIntakeHistoryIndex(nextIndex);
+    setTaskDraft((current) => ({ ...current, rawIntake: entry.text }));
+    setStatusMessage(`שחזרתי טיוטה מלפני עד שעה (${nextIndex + 1}/${history.length}).`);
+    setErrorMessage('');
   };
 
   const addSubtaskRow = () => updateTaskDraft('subtasks', [...taskDraft.subtasks, '']);
@@ -172,12 +230,29 @@ export function CreateMissionItemButton({
     recognition.interimResults = true;
     recognitionRef.current = recognition;
     speechBaseTextRef.current = taskDraft.rawIntake;
+    speechFinalTextRef.current = '';
 
     recognition.onresult = (event) => {
-      let spokenText = '';
-      for (let i = 0; i < event.results.length; i += 1) {
-        spokenText += `${event.results[i][0]?.transcript ?? ''} `;
+      let finalUpdate = '';
+      let interimUpdate = '';
+      const startIndex = typeof event.resultIndex === 'number' ? event.resultIndex : 0;
+
+      for (let i = startIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        const transcript = result[0]?.transcript?.trim() ?? '';
+        if (!transcript) continue;
+        if (result.isFinal) {
+          finalUpdate = `${finalUpdate} ${transcript}`.trim();
+        } else {
+          interimUpdate = transcript;
+        }
       }
+
+      if (finalUpdate) {
+        speechFinalTextRef.current = mergeSpeechIntoDraft(speechFinalTextRef.current, finalUpdate);
+      }
+
+      const spokenText = `${speechFinalTextRef.current} ${interimUpdate}`.trim();
       const nextText = mergeSpeechIntoDraft(speechBaseTextRef.current, spokenText);
       setTaskDraft((cur) => ({ ...cur, rawIntake: nextText }));
       setSpeechInputStatus('מקשיב ומכניס טקסט לתיבה...');
@@ -197,7 +272,7 @@ export function CreateMissionItemButton({
     try {
       recognition.start();
       setIsSpeechInputActive(true);
-      setSpeechInputStatus('מקשיב... דבר חופשי בעברית או באנגלית. אפשר להגיד נקודה, פסיק, שורה חדשה.');
+      setSpeechInputStatus('מקשיב... אפשר להגיד: רד שורה, פסקה חדשה, סעיף חדש, נקודותיים, אחד.');
     } catch (error) {
       setSpeechInputStatus(error instanceof Error ? error.message : 'לא הצלחתי להתחיל הכתבה.');
       setIsSpeechInputActive(false);
@@ -261,6 +336,8 @@ export function CreateMissionItemButton({
     const text = taskDraft.rawIntake.trim();
     if (!text) { setErrorMessage('כתוב או הדבק טקסט חופשי לפני שמסדרים טיוטה.'); return; }
 
+    saveIntakeHistoryEntry(text);
+    setIntakeHistoryIndex(-1);
     const parsed = parseIntakeText(text, todayISO, existingTasks, existingSubtasks);
     const parsedSchedule = getDateFromHebrewText(text, todayISO);
     const baseRows =
@@ -621,7 +698,9 @@ export function CreateMissionItemButton({
           className="fixed inset-0 z-50 flex items-end bg-slate-950/40 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6"
           role="dialog"
           aria-modal="true"
-          onClick={(e) => { if (e.target === e.currentTarget) closePanel(); }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setStatusMessage('הטיוטה נשארה פתוחה. כדי לסגור לחץ X או ביטול.');
+          }}
         >
           <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl ring-1 ring-slate-200 sm:mx-auto sm:max-w-3xl sm:rounded-[2rem]">
 
@@ -659,7 +738,8 @@ export function CreateMissionItemButton({
                 <>
                   <IntakePanel
                     rawIntake={taskDraft.rawIntake}
-                    onRawIntakeChange={(v) => updateTaskDraft('rawIntake', v)}
+                    onRawIntakeChange={updateRawIntake}
+                    onRawIntakeKeyDown={handleRawIntakeKeyDown}
                     isSpeechInputActive={isSpeechInputActive}
                     speechInputStatus={speechInputStatus}
                     speechInputLanguage={speechInputLanguage}

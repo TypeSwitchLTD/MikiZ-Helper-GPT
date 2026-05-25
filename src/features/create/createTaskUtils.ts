@@ -233,15 +233,22 @@ export function splitFreeTextIntoCandidates(text: string): string[] {
     .replace(/\s+וגם\s+/g, '\n')
     .replace(/\s+בנוסף\s+/g, '\n')
     .replace(/\s+ואז\s+/g, '\n')
-    .replace(/[;]+/g, '\n')
-    .replace(/\.\s+/g, '\n')
-    .replace(/,\s+/g, '\n');
+    .replace(/[;]+/g, '\n');
 
   return normalized
     .split('\n')
     .map((segment) => stripTemporalWords(cleanTaskText(segment)))
     .filter((segment) => segment.length > 1)
     .slice(0, 12);
+}
+
+export function splitSentenceSubtasks(text: string): string[] {
+  return normalizeIntakeText(text)
+    .replace(/\s+/g, ' ')
+    .split(/\s*[.!?؟]\s+/)
+    .map((segment) => stripTemporalWords(cleanTaskText(segment)))
+    .filter((segment) => segment.length > 1)
+    .slice(0, 10);
 }
 
 export function shouldUseSingleParent(candidates: string[], originalText: string): boolean {
@@ -464,6 +471,8 @@ export function parseIntakeText(
 
   const candidates = splitFreeTextIntoCandidates(normalized);
   const fallback = stripTemporalWords(cleanTaskText(normalized));
+  const sentenceSubtasks =
+    candidates.length <= 1 ? splitSentenceSubtasks(fallback) : [];
 
   if (candidates.length > 1 && !shouldUseSingleParent(candidates, normalized)) {
     const reviewRows = candidates.map((candidate, index) => {
@@ -493,8 +502,16 @@ export function parseIntakeText(
     };
   }
 
-  const title = stripTemporalWords(cleanTaskText(candidates[0] ?? fallback)) || fallback;
-  const cleanSubtasks = (candidates.length > 0 ? candidates : [fallback])
+  const titleSource =
+    sentenceSubtasks.length > 1 ? sentenceSubtasks[0] : candidates[0] ?? fallback;
+  const title = stripTemporalWords(cleanTaskText(titleSource)) || fallback;
+  const cleanSubtasks = (
+    sentenceSubtasks.length > 1
+      ? sentenceSubtasks
+      : candidates.length > 0
+        ? candidates
+        : [fallback]
+  )
     .map((c) => stripTemporalWords(cleanTaskText(c)) || cleanTaskText(c))
     .filter(Boolean);
   return {
@@ -541,6 +558,7 @@ export function getDomainOptionClass(index: number): string {
 // ─── Speech ───────────────────────────────────────────────────────────────────
 
 export type SpeechRecognitionEventLike = {
+  resultIndex?: number;
   results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
 };
 
@@ -569,6 +587,7 @@ export function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | 
 
 export function normalizeSpokenText(input: string): string {
   return input
+    .replace(/\bline break\b|\bgo down a line\b/gi, '\n')
     .replace(/\bnew line\b/gi, '\n')
     .replace(/\bnew paragraph\b/gi, '\n\n')
     .replace(/\bcomma\b/gi, ',')
@@ -583,6 +602,37 @@ export function normalizeSpokenText(input: string): string {
     .replace(/\bopen parenthesis\b/gi, '(')
     .replace(/\bclose parenthesis\b/gi, ')')
     .replace(/\bnext item\b/gi, '\n- ')
+    .replace(/\bone\b/gi, '\n1. ')
+    .replace(/\btwo\b/gi, '\n2. ')
+    .replace(/\bthree\b/gi, '\n3. ')
+    .replace(/\bfour\b/gi, '\n4. ')
+    .replace(/\bfive\b/gi, '\n5. ')
+    .replace(/רד שורה/g, '\n')
+    .replace(/תרד שורה/g, '\n')
+    .replace(/שורה חדשה/g, '\n')
+    .replace(/ירידת שורה/g, '\n')
+    .replace(/פסקה חדשה/g, '\n\n')
+    .replace(/סעיף חדש/g, '\n- ')
+    .replace(/מקף חדש/g, '\n- ')
+    .replace(/נקודתיים/g, ':')
+    .replace(/נקודותיים/g, ':')
+    .replace(/סימן שאלה/g, '?')
+    .replace(/סימן קריאה/g, '!')
+    .replace(/גרשיים/g, '"')
+    .replace(/מרכאות/g, '"')
+    .replace(/פתח סוגריים/g, '(')
+    .replace(/סגור סוגריים/g, ')')
+    .replace(/(^|[\s\n])אחד(?=[\s\n]|$)/g, '$1\n1. ')
+    .replace(/(^|[\s\n])שתיים(?=[\s\n]|$)/g, '$1\n2. ')
+    .replace(/(^|[\s\n])שניים(?=[\s\n]|$)/g, '$1\n2. ')
+    .replace(/(^|[\s\n])שלוש(?=[\s\n]|$)/g, '$1\n3. ')
+    .replace(/(^|[\s\n])ארבע(?=[\s\n]|$)/g, '$1\n4. ')
+    .replace(/(^|[\s\n])חמש(?=[\s\n]|$)/g, '$1\n5. ')
+    .replace(/(^|[\s\n])שש(?=[\s\n]|$)/g, '$1\n6. ')
+    .replace(/(^|[\s\n])שבע(?=[\s\n]|$)/g, '$1\n7. ')
+    .replace(/(^|[\s\n])שמונה(?=[\s\n]|$)/g, '$1\n8. ')
+    .replace(/(^|[\s\n])תשע(?=[\s\n]|$)/g, '$1\n9. ')
+    .replace(/(^|[\s\n])עשר(?=[\s\n]|$)/g, '$1\n10. ')
     .replace(/שורה חדשה/g, '\n')
     .replace(/פסקה חדשה/g, '\n\n')
     .replace(/סעיף חדש/g, '\n- ')

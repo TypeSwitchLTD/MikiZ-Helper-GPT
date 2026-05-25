@@ -437,19 +437,25 @@ export function ReadOnlyTaskCard({
     setIsDetailsEditOpen(false);
   };
 
+  const pendingSubtaskTitles = newSubtaskTitle
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   const handleAddSubtask = async () => {
     if (!onAddSubtaskToTask) return;
-    const title = newSubtaskTitle.trim();
-    if (!title) {
-      setActionError("כתוב שם לתת־משימה לפני שמירה.");
+    if (!pendingSubtaskTitles.length) {
+      setActionError("כתוב לפחות תת־משימה אחת לפני שמירה.");
       return;
     }
     setActionError("");
-    await onAddSubtaskToTask({
-      taskId: task.id,
-      title,
-      notes: newSubtaskNotes,
-    });
+    for (const title of pendingSubtaskTitles) {
+      await onAddSubtaskToTask({
+        taskId: task.id,
+        title,
+        notes: newSubtaskNotes.trim() || undefined,
+      });
+    }
     setNewSubtaskTitle("");
     setNewSubtaskNotes("");
     setIsAddSubtaskOpen(false);
@@ -1015,21 +1021,22 @@ export function ReadOnlyTaskCard({
                     </div>
                   ) : null}
 
-                  {isAddSubtaskOpen ? (
-                    <div className="grid gap-2 rounded-2xl bg-white p-3 ring-1 ring-emerald-100">
-                      <label className="field-compact">
-                        <span>תת־משימה חדשה</span>
-                        <input
-                          value={newSubtaskTitle}
-                          onChange={(event) =>
-                            setNewSubtaskTitle(event.target.value)
-                          }
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") void handleAddSubtask();
-                          }}
-                          placeholder="למשל: לשלוח לג׳ק סיכום צבעים"
-                        />
-                      </label>
+                      {isAddSubtaskOpen ? (
+                        <div className="grid gap-2 rounded-2xl bg-white p-3 ring-1 ring-emerald-100">
+                          <label className="field-compact">
+                            <span>תתי־משימות חדשות</span>
+                            <textarea
+                              rows={4}
+                              value={newSubtaskTitle}
+                              onChange={(event) =>
+                                setNewSubtaskTitle(event.target.value)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) void handleAddSubtask();
+                              }}
+                              placeholder={"כל שורה תהיה תת־משימה נפרדת\nלמשל: לשלוח לג׳ק סיכום צבעים\nלוודא מחיר אריזה\nלקבל ETA"}
+                            />
+                          </label>
                       <label className="field-compact">
                         <span>הערות לתת־משימה</span>
                         <textarea
@@ -1047,11 +1054,13 @@ export function ReadOnlyTaskCard({
                           disabled={
                             isSaving ||
                             !onAddSubtaskToTask ||
-                            !newSubtaskTitle.trim()
+                            pendingSubtaskTitles.length === 0
                           }
                           onClick={() => void handleAddSubtask()}
                         >
-                          הוסף תת־משימה
+                          {pendingSubtaskTitles.length > 1
+                            ? `הוסף ${pendingSubtaskTitles.length} תתי־משימות`
+                            : "הוסף תת־משימה"}
                         </button>
                         <button
                           type="button"
