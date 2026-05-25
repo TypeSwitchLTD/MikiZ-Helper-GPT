@@ -3,6 +3,7 @@ import type { LogEvent } from '../logs/logTypes';
 import type { RecurrenceFrequency, RecurringTaskDefinition } from './recurringTypes';
 import { nowISO } from '../../utils/dates';
 import { createId } from '../../utils/ids';
+import { cleanReadableText, looksLikeCorruptedText } from './recurringText';
 
 type RecurringImportTask = {
   title?: string;
@@ -40,14 +41,16 @@ function asTaskArray(payload: unknown): RecurringImportTask[] {
 function getFrequency(task: RecurringImportTask): RecurrenceFrequency {
   const text = `${task.title ?? ''} ${(task.tags ?? []).join(' ')}`.toLowerCase();
   if (text.includes('monthly') || text.includes('חודשי')) return 'once_per_month';
+  if (text.includes('biweekly') || text.includes('דו שבועי')) return 'once_every_two_weeks';
+  if (text.includes('3x') || text.includes('three times') || text.includes('שלוש פעמים')) return 'three_times_per_week';
   if (text.includes('weekly') || text.includes('שבועי')) return 'once_per_week';
   if (text.includes('daily') || text.includes('יומי')) return 'every_day';
   return 'once_per_week';
 }
 
 function cleanRecurringTitle(title: string): string {
-  return title
-    .replace(/^\s*(יומי|שבועי|חודשי)\s*[—–-]\s*/u, '')
+  return cleanReadableText(title)
+    .replace(/^\s*(יומי|שבועי|חודשי|דו שבועי)\s*[–—-]\s*/u, '')
     .trim();
 }
 
@@ -66,12 +69,16 @@ export function buildRecurringDefinitionsFromTaskImport(payload: unknown): Recur
   return tasks
     .map((task, index): RecurringTaskDefinition | null => {
       const rawTitle = task.title?.trim();
-      if (!rawTitle) return null;
-      const title = cleanRecurringTitle(rawTitle) || rawTitle;
+      if (!rawTitle || looksLikeCorruptedText(rawTitle)) return null;
+
+      const title = cleanRecurringTitle(rawTitle);
+      if (!title) return null;
+
       const frequency = getFrequency(task);
       const duration = task.durationMinutes ?? task.estimatedDurationMinutes ?? null;
       const projectId = task.projectId || 'personal';
       const domainId = task.domainId || 'personal';
+      const notes = cleanReadableText(task.notes);
       const id = `recurring-import-${frequency}-${hashString(`${rawTitle}:${projectId}:${domainId}:${index}`)}`;
 
       return {
@@ -81,7 +88,7 @@ export function buildRecurringDefinitionsFromTaskImport(payload: unknown): Recur
         projectId,
         domainId,
         frequency,
-        preferredTimingNote: task.notes,
+        preferredTimingNote: notes || undefined,
         defaultScheduledTimeLabel: task.scheduledTimeLabel ?? undefined,
         defaultSubtasks: [
           {
@@ -122,7 +129,7 @@ export async function softDeleteAllRecurringDefinitions(): Promise<number> {
 export async function replaceRecurringDefinitionsFromTaskImport(payload: unknown): Promise<number> {
   const definitions = buildRecurringDefinitionsFromTaskImport(payload);
   if (!definitions.length) {
-    throw new Error('לא נמצאו משימות חוזרות בקובץ.');
+    throw new Error('לא נמצאו בקובץ משימות חוזרות קריאות. ייתכן שהקובץ מקודד לא נכון או שאין בו bucket=recurring.');
   }
 
   const timestamp = nowISO();

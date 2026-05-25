@@ -586,6 +586,62 @@ export function getSpeechRecognitionCtor(): (new () => SpeechRecognitionLike) | 
 }
 
 export function normalizeSpokenText(input: string): string {
+  return normalizeSpokenTextWithCommands(input);
+}
+
+function normalizeSpokenTextWithCommands(input: string): string {
+  const replacements: Array<[RegExp, string]> = [
+    [/\b(line break|go down a line|new line)\b/gi, '\n'],
+    [/\bnew paragraph\b/gi, '\n\n'],
+    [/\b(next item|new item)\b/gi, '\n- '],
+    [/\bcomma\b/gi, ','],
+    [/\b(period|full stop)\b/gi, '.'],
+    [/\bquestion mark\b/gi, '?'],
+    [/\bcolon\b/gi, ':'],
+    [/\bsemicolon\b/gi, ';'],
+    [/\b(hyphen|dash)\b/gi, '-'],
+    [/\bslash\b/gi, '/'],
+    [/\b(open quote|close quote)\b/gi, '"'],
+    [/\bopen parenthesis\b/gi, '('],
+    [/\bclose parenthesis\b/gi, ')'],
+    [/(^|[\s\n])(one|number one)(?=[\s\n]|$)/gi, '$1\n1. '],
+    [/(^|[\s\n])(two|number two)(?=[\s\n]|$)/gi, '$1\n2. '],
+    [/(^|[\s\n])(three|number three)(?=[\s\n]|$)/gi, '$1\n3. '],
+    [/(^|[\s\n])(four|number four)(?=[\s\n]|$)/gi, '$1\n4. '],
+    [/(^|[\s\n])(five|number five)(?=[\s\n]|$)/gi, '$1\n5. '],
+    [/רד שורה|תרד שורה|שורה חדשה|ירידת שורה/g, '\n'],
+    [/פסקה חדשה/g, '\n\n'],
+    [/סעיף חדש|סעיף הבא|מקף חדש/g, '\n- '],
+    [/נקודתיים|נקודותיים/g, ':'],
+    [/נקודה/g, '.'],
+    [/פסיק/g, ','],
+    [/סימן שאלה/g, '?'],
+    [/סימן קריאה/g, '!'],
+    [/גרשיים|מרכאות/g, '"'],
+    [/פתח סוגריים/g, '('],
+    [/סגור סוגריים/g, ')'],
+    [/(^|[\s\n])(אחד|מספר אחד)(?=[\s\n]|$)/g, '$1\n1. '],
+    [/(^|[\s\n])(שתיים|שניים|מספר שתיים|מספר שניים)(?=[\s\n]|$)/g, '$1\n2. '],
+    [/(^|[\s\n])(שלוש|מספר שלוש)(?=[\s\n]|$)/g, '$1\n3. '],
+    [/(^|[\s\n])(ארבע|מספר ארבע)(?=[\s\n]|$)/g, '$1\n4. '],
+    [/(^|[\s\n])(חמש|מספר חמש)(?=[\s\n]|$)/g, '$1\n5. '],
+    [/(^|[\s\n])(שש|מספר שש)(?=[\s\n]|$)/g, '$1\n6. '],
+    [/(^|[\s\n])(שבע|מספר שבע)(?=[\s\n]|$)/g, '$1\n7. '],
+    [/(^|[\s\n])(שמונה|מספר שמונה)(?=[\s\n]|$)/g, '$1\n8. '],
+    [/(^|[\s\n])(תשע|מספר תשע)(?=[\s\n]|$)/g, '$1\n9. '],
+    [/(^|[\s\n])(עשר|מספר עשר)(?=[\s\n]|$)/g, '$1\n10. '],
+  ];
+
+  return replacements
+    .reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), input)
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function normalizeSpokenTextLegacy(input: string): string {
   return input
     .replace(/\bline break\b|\bgo down a line\b/gi, '\n')
     .replace(/\bnew line\b/gi, '\n')

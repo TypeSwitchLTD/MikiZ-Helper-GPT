@@ -24,7 +24,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.2";
+const APP_VERSION = "0.8.4";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -1676,16 +1676,18 @@ export function AppShell() {
         <span>{morning.isSpeaking ? "עצור נאום" : "נאום בוקר"}</span>
       </button>
 
-      <CreateMissionItemButton
-        settings={data.settings}
-        todayISO={data.todayISO}
-        isSaving={data.isSaving}
-        existingTasks={data.tasks}
-        existingSubtasks={data.subtasks}
-        onCreateTask={data.createTask}
-        onAddSubtaskToTask={data.addSubtaskToExistingTask}
-        onOpenReminder={() => setQuickReminderOpen(true)}
-      />
+      {activeTab !== "settings" ? (
+        <CreateMissionItemButton
+          settings={data.settings}
+          todayISO={data.todayISO}
+          isSaving={data.isSaving}
+          existingTasks={data.tasks}
+          existingSubtasks={data.subtasks}
+          onCreateTask={data.createTask}
+          onAddSubtaskToTask={data.addSubtaskToExistingTask}
+          onOpenReminder={() => setQuickReminderOpen(true)}
+        />
+      ) : null}
 
       {quickReminderOpen ? (
         <QuickReminderModal

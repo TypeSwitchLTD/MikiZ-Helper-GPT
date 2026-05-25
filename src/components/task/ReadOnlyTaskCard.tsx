@@ -245,6 +245,7 @@ export function ReadOnlyTaskCard({
   const [editTags, setEditTags] = useState<string[]>(task.tags ?? []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskNotes, setNewSubtaskNotes] = useState("");
+  const [showDoneSubtasks, setShowDoneSubtasks] = useState(false);
   const [editedSubtaskTitles, setEditedSubtaskTitles] = useState<Record<string, string>>({});
   const [reminderTarget, setReminderTarget] = useState<{
     type: "task" | "subtask";
@@ -257,6 +258,27 @@ export function ReadOnlyTaskCard({
   const [reminderTitle, setReminderTitle] = useState("");
   const cardRef = useRef<HTMLElement | null>(null);
   const taskSubtasks = getSubtasksForTask(task.id, subtasks);
+  const activeWorkSubtasks = taskSubtasks.filter(
+    (subtask) => subtask.status !== "done" && subtask.status !== "cancelled",
+  );
+  const startedWorkSubtasks = activeWorkSubtasks.filter((subtask) =>
+    isSubtaskStarted(subtask),
+  );
+  const openWorkSubtasks = activeWorkSubtasks.filter(
+    (subtask) => !isSubtaskStarted(subtask),
+  );
+  const doneSubtasks = taskSubtasks.filter((subtask) => subtask.status === "done");
+  const cancelledSubtasks = taskSubtasks.filter((subtask) => subtask.status === "cancelled");
+  const shouldCollapseDoneSubtasks = doneSubtasks.length >= 3;
+  const visibleDoneSubtasks = shouldCollapseDoneSubtasks && !showDoneSubtasks
+    ? doneSubtasks.slice(-1)
+    : doneSubtasks;
+  const visibleSubtasks = [
+    ...startedWorkSubtasks,
+    ...openWorkSubtasks,
+    ...visibleDoneSubtasks,
+    ...cancelledSubtasks,
+  ];
   const progress = getTaskProgress(task, subtasks);
   const taskReminder = getFirstPendingReminder(reminders, task.id, null);
   const taskReminderLabel = formatShortReminder(taskReminder);
@@ -282,6 +304,7 @@ export function ReadOnlyTaskCard({
     setEditEffort(task.effort);
     setEditTags(task.tags);
     setTargetDate(task.date ?? "");
+    setShowDoneSubtasks(false);
   }, [task]);
 
   useEffect(() => {
@@ -656,8 +679,16 @@ export function ReadOnlyTaskCard({
             </p>
           ) : null}
 
+          {taskSubtasks.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2 text-[11px] font-black text-slate-600 ring-1 ring-slate-200">
+              <span className="text-slate-900">עבודה פתוחה: {activeWorkSubtasks.length}</span>
+              <span>בוצעו: {doneSubtasks.length}</span>
+              {cancelledSubtasks.length ? <span>בוטלו: {cancelledSubtasks.length}</span> : null}
+            </div>
+          ) : null}
+
           <ul className="space-y-2">
-            {taskSubtasks.map((subtask) => {
+            {visibleSubtasks.map((subtask) => {
               const started = isSubtaskStarted(subtask);
               const done = isSubtaskDone(subtask);
               const subtaskReminder = getFirstPendingReminder(
@@ -772,6 +803,18 @@ export function ReadOnlyTaskCard({
               );
             })}
           </ul>
+
+          {shouldCollapseDoneSubtasks ? (
+            <button
+              type="button"
+              className="w-full rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+              onClick={() => setShowDoneSubtasks((current) => !current)}
+            >
+              {showDoneSubtasks
+                ? "הסתר תתי־משימות שבוצעו"
+                : `הצג ${doneSubtasks.length} תתי־משימות שבוצעו`}
+            </button>
+          ) : null}
 
           {canUseTaskActions ? (
             <div

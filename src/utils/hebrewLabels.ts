@@ -3,7 +3,7 @@ import type { RecurrenceFrequency } from '../domain/recurring/recurringTypes';
 
 export const statusLabels: Record<TaskStatusDerived, string> = {
   not_started: 'פתוח',
-  in_progress: 'התחיל',
+  in_progress: 'בתהליך',
   done: 'בוצע',
   cancelled: 'בוטל',
   moved: 'הועבר',

@@ -70,14 +70,14 @@ export function IntakePanel({
       {/* ── Free-text area ───────────────────────────────── */}
       <div className="rounded-2xl bg-slate-50 p-1 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-sky-400 transition">
         <textarea
-          rows={4}
+          rows={6}
           value={rawIntake}
           onChange={(e) => onRawIntakeChange(e.target.value)}
           onKeyDown={onRawIntakeKeyDown}
           placeholder={
             'לדוגמה:\nלהתקשר למשה מחר ב-16:00\nלבדוק אם Jack שלח timeline\nלהכין פוסט קצר על TimerAligner'
           }
-          className="w-full resize-none bg-transparent px-3 py-2.5 text-sm font-medium text-slate-800 placeholder-slate-400 outline-none"
+          className="min-h-[9rem] w-full resize-y bg-transparent px-3 py-2.5 text-sm font-medium text-slate-800 placeholder-slate-400 outline-none"
         />
       </div>
 

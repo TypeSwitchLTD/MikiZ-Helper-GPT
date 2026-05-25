@@ -506,7 +506,7 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
         useSpeakerBoost: form.elevenLabsUseSpeakerBoost, speechRate: form.speechRate, narratorGender: form.voiceNarratorGender,
       },
     };
-    const testText = 'בדיקת קול קצרה ממישן קונטרול. אם שינית מהירות, אתה אמור לשמוע את ההבדל עכשיו.';
+    const cleanTestText = 'בדיקת קול קצרה ממישן קונטרול. אם שינית מהירות, אתה אמור לשמוע את ההבדל עכשיו.';
     const speechRate = normalizeSpeechRate(form.speechRate);
     if (form.voiceEngine === 'browser') {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -514,7 +514,7 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
         return;
       }
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(testText);
+      const utterance = new SpeechSynthesisUtterance(cleanTestText);
       const voices = window.speechSynthesis.getVoices();
       const hebrewVoice = voices.find((voice) => voice.lang.toLowerCase().startsWith('he')) ?? voices[0] ?? null;
       if (hebrewVoice) utterance.voice = hebrewVoice;
@@ -530,14 +530,21 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
     }
     const status = getElevenLabsConfigStatus(draftSettings);
     if (!status.ok) { setVoiceTestStatus(status.message); return; }
-    setVoiceTestStatus(`בודק קול... ${status.message}`);
-    const result = await createElevenLabsAudioUrl(testText, draftSettings);
+    setVoiceTestStatus(`בודק ElevenLabs במהירות ${speechRate.toFixed(2)}x... ${status.message}`);
+    const result = await createElevenLabsAudioUrl(cleanTestText, draftSettings);
     if (!result.ok || !result.audioUrl) { setVoiceTestStatus(`נכשל: ${result.error || 'שגיאה לא ידועה'}`); return; }
     const audio = new Audio(result.audioUrl);
     audio.playbackRate = speechRate;
-    audio.onended = () => URL.revokeObjectURL(result.audioUrl ?? '');
+    audio.onended = () => {
+      URL.revokeObjectURL(result.audioUrl ?? '');
+      setVoiceTestStatus(`הצליח. ElevenLabs במהירות ${speechRate.toFixed(2)}x.`);
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(result.audioUrl ?? '');
+      setVoiceTestStatus('בדיקת ElevenLabs נכשלה בזמן ניגון.');
+    };
     await audio.play();
-    setVoiceTestStatus(`הצליח. מנגן דרך ${result.usedProxy ? 'Proxy' : 'Direct'} במהירות ${speechRate.toFixed(2)}x.`);
+    setVoiceTestStatus(`מנגן דרך ${result.usedProxy ? 'Proxy' : 'Direct'} במהירות ${speechRate.toFixed(2)}x.`);
   }
 
   // ── Cloudflare morning API test ──

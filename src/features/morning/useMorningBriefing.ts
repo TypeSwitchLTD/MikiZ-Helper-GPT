@@ -99,6 +99,11 @@ export function useMorningBriefing({
   const currentAudioUrlRef = useRef<string | null>(null);
   const voiceRunRef = useRef(0);
 
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.playbackRate = normalizeSpeechRate(settings?.voice?.speechRate);
+  }, [settings?.voice?.speechRate]);
+
   // ── Weather fetch on mount / settings change ──────────────────────────────
   useEffect(() => {
     if (!settings) return;

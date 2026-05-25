@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { SectionCard } from '../../components/layout/SectionCard';
 import type { RecurringTaskDefinition } from '../../domain/recurring/recurringTypes';
 import { buildRecurringViewModels, getRecurringStateLabel } from '../../domain/recurring/recurringSchedule';
+import { looksLikeCorruptedText } from '../../domain/recurring/recurringText';
 import type { AppSettings } from '../../domain/settings/settingsTypes';
 import type { Task } from '../../domain/tasks/taskTypes';
 import { recurrenceLabels } from '../../utils/hebrewLabels';
@@ -36,9 +37,19 @@ export function RecurringTab({
 }: RecurringTabProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState('');
+
+  const activeDefinitions = useMemo(
+    () => recurringDefinitions.filter((definition) => definition.isActive && !definition.deletedAt),
+    [recurringDefinitions],
+  );
+  const readableDefinitions = useMemo(
+    () => activeDefinitions.filter((definition) => !looksLikeCorruptedText(definition.title)),
+    [activeDefinitions],
+  );
+  const corruptedCount = activeDefinitions.length - readableDefinitions.length;
   const viewModels = useMemo(
-    () => buildRecurringViewModels(recurringDefinitions, tasks, todayISO),
-    [recurringDefinitions, tasks, todayISO],
+    () => buildRecurringViewModels(readableDefinitions, tasks, todayISO),
+    [readableDefinitions, tasks, todayISO],
   );
 
   const dueCount = viewModels.filter((item) => item.state === 'due_today').length;
@@ -50,18 +61,18 @@ export function RecurringTab({
     if (!ok) return;
     setStatus('מוחק הגדרות חוזרות...');
     const count = await onClearAll();
-    setStatus(`נמחקו ${count} הגדרות חוזרות וסונכרן לענן.`);
+    setStatus(`נמחקו ${count} הגדרות חוזרות. עכשיו אפשר לייבא JSON נקי.`);
   };
 
   const handleImportFile = async (file: File | null) => {
     if (!file || !onImportFromJson) return;
-    setStatus('קורא וממיר קובץ חוזרות...');
+    setStatus('קורא ומחליף הגדרות חוזרות...');
     try {
       const payload = JSON.parse(await file.text());
       const count = await onImportFromJson(payload);
-      setStatus(`יובאו ${count} הגדרות חוזרות חדשות וסונכרנו לענן.`);
+      setStatus(`הוחלפו ההגדרות החוזרות: יובאו ${count} הגדרות נקיות.`);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'ייבוא החוזרות נכשל.');
+      setStatus(error instanceof Error ? error.message : 'ייבוא ההגדרות החוזרות נכשל.');
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -71,7 +82,7 @@ export function RecurringTab({
     <div className="space-y-5">
       <SectionCard
         title="שבועי / חוזר"
-        description="ניהול הגדרות חוזרות בלי מנוע RRULE כבד. כרגע הוספה להיום היא פעולה ידנית ובטוחה."
+        description="ניהול משימות שחוזרות על עצמן. הייבוא מחליף את ההגדרות הישנות ולא מערבב אותן."
       >
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
@@ -87,11 +98,17 @@ export function RecurringTab({
             <p className="mt-1 text-3xl font-black text-sky-900">{viewModels.length}</p>
           </div>
         </div>
+
+        {corruptedCount > 0 ? (
+          <div className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-800 ring-1 ring-rose-100">
+            נמצאו {corruptedCount} הגדרות חוזרות לא קריאות. הן מוסתרות מהתצוגה; לחץ “מחק חוזרות” ואז ייבא JSON נקי.
+          </div>
+        ) : null}
       </SectionCard>
 
       <SectionCard
         title="הגדרות חוזרות"
-        description="לחיצה על הוספה להיום יוצרת מופע משימה רגיל עם תתי־משימות ב־Today."
+        description="לחיצה על “הוסף להיום” יוצרת משימה רגילה ב-Today. ייבוא JSON מחליף את ההגדרות הישנות."
         action={
           <div className="flex flex-wrap gap-2">
             <input
@@ -107,11 +124,11 @@ export function RecurringTab({
               className="rounded-2xl bg-emerald-600 px-3 py-2 text-xs font-black text-white transition hover:bg-emerald-700 disabled:opacity-50"
               onClick={() => fileInputRef.current?.click()}
             >
-              איפוס וייבוא JSON
+              החלף מ-JSON
             </button>
             <button
               type="button"
-              disabled={isSaving || !onClearAll || viewModels.length === 0}
+              disabled={isSaving || !onClearAll || activeDefinitions.length === 0}
               className="rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100 transition hover:bg-rose-100 disabled:opacity-50"
               onClick={() => void handleClearAll()}
             >
@@ -127,7 +144,7 @@ export function RecurringTab({
         ) : null}
 
         {viewModels.length === 0 ? (
-          <p className="text-sm text-slate-500">אין הגדרות חוזרות פעילות.</p>
+          <p className="text-sm text-slate-500">אין הגדרות חוזרות פעילות וקריאות.</p>
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
             {viewModels.map(({ definition, state, alreadyAddedToday, lastGeneratedDate }) => (
@@ -172,7 +189,6 @@ export function RecurringTab({
                   >
                     {alreadyAddedToday ? 'כבר נוסף להיום' : 'הוסף להיום'}
                   </button>
-                  <span className="text-xs text-slate-400">יצירת/עריכת הגדרות חוזרות חדשות תגיע בשלב Add Task.</span>
                 </div>
               </article>
             ))}

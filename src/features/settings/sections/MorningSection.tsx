@@ -187,7 +187,7 @@ export function MorningSection({
           <small className="text-xs font-bold text-slate-500">משנה רק מקריאה/מקריא, לא את המגדר שלך.</small>
         </div>
         <label className="field-card lg:col-span-2">
-          <span>מהירות הקראה בדפדפן: {form.speechRate.toFixed(2)}x</span>
+          <span>מהירות הקראה: {form.speechRate.toFixed(2)}x</span>
           <input type="range" min="0.65" max="2.00" step="0.05" value={form.speechRate} onChange={(e) => updateField('speechRate', Number(e.target.value))} />
           <small className="text-xs font-bold text-slate-400">0.65 — איטי · 1.00 — רגיל · 2.00 — מהיר מאוד</small>
         </label>

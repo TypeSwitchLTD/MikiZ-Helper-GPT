@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getAllLocalData, importDailyStatePayload, initializeLocalDatabase, rolloverStaleTodayTasks } from '../db/localData';
 import { hasCloudSyncToken, pullCloudSyncPayload, pushCloudSyncPayload, type CloudSyncPayload } from '../domain/cloud/cloudSync';
 import { db } from '../db/db';
@@ -40,7 +40,8 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.2-mobile-pin';
+const CLIENT_APP_VERSION = '0.8.4-background-sync';
+const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 interface MissionControlData {
   tasks: Task[];
@@ -135,6 +136,9 @@ export function useMissionControlData() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloudSyncStatus, setCloudSyncStatus] = useState<string>('');
+  const cloudSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cloudSyncQueuedRef = useRef(false);
+  const cloudSyncPromiseRef = useRef<ReturnType<typeof pushCloudSyncPayload> | null>(null);
 
   const reloadData = useCallback(async () => {
     await initializeLocalDatabase();
@@ -143,7 +147,7 @@ export function useMissionControlData() {
     setError(null);
   }, []);
 
-  const pushLocalDataToCloud = useCallback(async () => {
+  const runCloudPush = useCallback(async () => {
     await initializeLocalDatabase();
     const localData = await getAllLocalData({ includeDeleted: true });
     const payload = buildCloudSyncPayload(localData);
@@ -153,10 +157,53 @@ export function useMissionControlData() {
       return { ok: false, error: message };
     }
     setCloudSyncStatus('מסנכרן לענן...');
-    const result = await pushCloudSyncPayload(localData.settings, payload);
-    setCloudSyncStatus(result.ok ? `סונכרן לענן: ${result.counts?.tasks ?? 0} משימות, ${result.counts?.subtasks ?? 0} תתי־משימות` : `שגיאת Cloud sync: ${result.error}`);
-    return result;
+    try {
+      const result = await pushCloudSyncPayload(localData.settings, payload);
+      setCloudSyncStatus(result.ok ? `סונכרן לענן: ${result.counts?.tasks ?? 0} משימות, ${result.counts?.subtasks ?? 0} תתי־משימות` : `שגיאת Cloud sync: ${result.error}`);
+      return result;
+    } catch (syncError) {
+      const message = syncError instanceof Error ? syncError.message : 'שגיאת Cloud sync לא ידועה';
+      setCloudSyncStatus(`שגיאת Cloud sync: ${message}`);
+      return { ok: false, error: message };
+    }
   }, []);
+
+  const flushCloudSync = useCallback(async () => {
+    if (cloudSyncTimerRef.current) {
+      clearTimeout(cloudSyncTimerRef.current);
+      cloudSyncTimerRef.current = null;
+    }
+    if (cloudSyncPromiseRef.current) {
+      cloudSyncQueuedRef.current = true;
+      return cloudSyncPromiseRef.current;
+    }
+
+    const syncPromise = (async () => {
+      try {
+        let latestResult = await runCloudPush();
+        while (cloudSyncQueuedRef.current) {
+          cloudSyncQueuedRef.current = false;
+          latestResult = await runCloudPush();
+        }
+        return latestResult;
+      } finally {
+        cloudSyncPromiseRef.current = null;
+      }
+    })();
+    cloudSyncPromiseRef.current = syncPromise;
+    return syncPromise;
+  }, [runCloudPush]);
+
+  const scheduleCloudSync = useCallback(() => {
+    if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+    setCloudSyncStatus('נשמר מקומית. מסנכרן לענן ברקע...');
+    cloudSyncTimerRef.current = setTimeout(() => {
+      cloudSyncTimerRef.current = null;
+      void flushCloudSync();
+    }, CLOUD_SYNC_DEBOUNCE_MS);
+  }, [flushCloudSync]);
+
+  const pushLocalDataToCloud = useCallback(async () => flushCloudSync(), [flushCloudSync]);
 
   const pullCloudDataToLocal = useCallback(async () => {
     await initializeLocalDatabase();
@@ -210,21 +257,14 @@ export function useMissionControlData() {
     }
   }, []);
 
-  const reloadDataAndPushCloud = useCallback(async () => {
+  const reloadDataAndPushCloud = useCallback(async (options?: { sync?: 'background' | 'immediate' }) => {
     await reloadData();
-    try {
-      const localData = await getAllLocalData({ includeDeleted: true });
-      if (hasCloudSyncToken(localData.settings)) {
-        const payload = buildCloudSyncPayload(localData);
-        if (payload) {
-          const result = await pushCloudSyncPayload(localData.settings, payload);
-          setCloudSyncStatus(result.ok ? `סונכרן לענן: ${result.counts?.tasks ?? 0} משימות` : `שגיאת Cloud sync: ${result.error}`);
-        }
-      }
-    } catch (syncError) {
-      setCloudSyncStatus(syncError instanceof Error ? `שגיאת Cloud sync: ${syncError.message}` : 'שגיאת Cloud sync לא ידועה');
+    if (options?.sync === 'immediate') {
+      await flushCloudSync();
+      return;
     }
-  }, [reloadData]);
+    scheduleCloudSync();
+  }, [flushCloudSync, reloadData, scheduleCloudSync]);
 
   useEffect(() => {
     let cancelled = false;
@@ -324,6 +364,12 @@ export function useMissionControlData() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (cloudSyncTimerRef.current) clearTimeout(cloudSyncTimerRef.current);
+    };
+  }, []);
+
   // Auto-pull when app returns to foreground (handles phone tab-switch)
   useEffect(() => {
     let lastPulledAt = 0;
@@ -346,7 +392,7 @@ export function useMissionControlData() {
       try {
         setIsSaving(true);
         await updateAppSettings(patch);
-        await reloadDataAndPushCloud();
+        await reloadDataAndPushCloud({ sync: 'immediate' });
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown settings save error');
         throw saveError;
@@ -666,7 +712,7 @@ export function useMissionControlData() {
     try {
       setIsSaving(true);
       await softDeleteAllTasks();
-      await reloadDataAndPushCloud();
+      await reloadDataAndPushCloud({ sync: 'immediate' });
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'שגיאה במחיקת משימות');
       throw saveError;
@@ -695,7 +741,7 @@ export function useMissionControlData() {
     try {
       setIsSaving(true);
       const count = await softDeleteAllRecurringDefinitions();
-      await reloadDataAndPushCloud();
+      await reloadDataAndPushCloud({ sync: 'immediate' });
       return count;
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Unknown recurring clear error');
@@ -710,7 +756,7 @@ export function useMissionControlData() {
       try {
         setIsSaving(true);
         const count = await replaceRecurringDefinitionsFromTaskImport(payload);
-        await reloadDataAndPushCloud();
+        await reloadDataAndPushCloud({ sync: 'immediate' });
         return count;
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown recurring import error');
@@ -756,7 +802,7 @@ export function useMissionControlData() {
       try {
         setIsSaving(true);
         await importDailyReportTasks(drafts);
-        await reloadDataAndPushCloud();
+        await reloadDataAndPushCloud({ sync: 'immediate' });
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown daily report import error');
         throw saveError;
@@ -774,7 +820,7 @@ export function useMissionControlData() {
       try {
         setIsSaving(true);
         const result = await deleteLastDailyReportImport();
-        await reloadDataAndPushCloud();
+        await reloadDataAndPushCloud({ sync: 'immediate' });
         return result;
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown delete import error');
@@ -796,7 +842,7 @@ export function useMissionControlData() {
         );
         // After import, roll over any stale "today" tasks (handles import of yesterday's JSON)
         await rolloverStaleTodayTasks();
-        await reloadDataAndPushCloud();
+        await reloadDataAndPushCloud({ sync: 'immediate' });
         return result;
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown daily state import error');

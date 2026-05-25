@@ -851,7 +851,10 @@ export function CreateMissionItemButton({
 
             {/* ── Sticky footer (task panel only) ───────────────────── */}
             {activePanel === 'task' ? (
-              <footer className="shrink-0 flex flex-col-reverse gap-2 border-t border-slate-100 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+              <footer
+                className="shrink-0 flex flex-col-reverse gap-2 border-t border-slate-100 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4"
+                style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+              >
                 {/* Left: cancel + reset */}
                 <div className="flex items-center justify-between gap-2 sm:justify-start">
                   <button
