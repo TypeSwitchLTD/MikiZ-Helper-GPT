@@ -14,6 +14,7 @@ import type {
 } from './createTaskTypes';
 import {
   buildReviewRowsForSingleParent,
+  addDaysISO,
   createContinuationTaskDraft,
   createEmptyScheduleDraft,
   createEmptyTaskDraft,
@@ -118,6 +119,7 @@ export function CreateMissionItemButton({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speechBaseTextRef = useRef('');
   const speechFinalTextRef = useRef('');
+  const speechFinalSegmentsRef = useRef<string[]>([]);
 
   // ─── Derived ─────────────────────────────────────────────────────────────────
   const activeProjects = useMemo(() => settings?.projects.filter((p) => p.isActive) ?? [], [settings]);
@@ -154,7 +156,48 @@ export function CreateMissionItemButton({
 
   // ─── Task draft handlers ─────────────────────────────────────────────────────
   const updateTaskDraft = <K extends keyof TaskDraftState>(key: K, value: TaskDraftState[K]) => {
-    setTaskDraft((current) => ({ ...current, [key]: value }));
+    setTaskDraft((current) => {
+      const tomorrow = addDaysISO(todayISO, 1);
+
+      if (key === 'date') {
+        const date = String(value);
+        return {
+          ...current,
+          date,
+          bucket: date === todayISO ? 'today' : 'backlog',
+          backlogGroup: date === todayISO ? current.backlogGroup : date === tomorrow ? 'tomorrow' : 'this_week',
+          scheduledTimeLabel: date === todayISO ? 'היום' : date === tomorrow ? 'מחר' : current.scheduledTimeLabel || date,
+        };
+      }
+
+      if (key === 'bucket') {
+        const bucket = value as TaskDraftState['bucket'];
+        if (bucket === 'today') {
+          return { ...current, bucket, date: todayISO, scheduledTimeLabel: 'היום' };
+        }
+        const backlogGroup = current.backlogGroup || 'this_week';
+        return {
+          ...current,
+          bucket,
+          backlogGroup,
+          date: backlogGroup === 'tomorrow' ? tomorrow : current.date,
+          scheduledTimeLabel: backlogGroup === 'tomorrow' ? 'מחר' : current.scheduledTimeLabel,
+        };
+      }
+
+      if (key === 'backlogGroup') {
+        const backlogGroup = value as TaskDraftState['backlogGroup'];
+        return {
+          ...current,
+          bucket: 'backlog',
+          backlogGroup,
+          date: backlogGroup === 'tomorrow' ? tomorrow : current.date,
+          scheduledTimeLabel: backlogGroup === 'tomorrow' ? 'מחר' : current.scheduledTimeLabel,
+        };
+      }
+
+      return { ...current, [key]: value };
+    });
     setErrorMessage('');
     setDuplicateCandidate(null);
   };
@@ -231,28 +274,47 @@ export function CreateMissionItemButton({
     recognitionRef.current = recognition;
     speechBaseTextRef.current = taskDraft.rawIntake;
     speechFinalTextRef.current = '';
+    speechFinalSegmentsRef.current = [];
 
     recognition.onresult = (event) => {
-      let finalUpdate = '';
-      let interimUpdate = '';
-      const startIndex = typeof event.resultIndex === 'number' ? event.resultIndex : 0;
+      const nextFinalSegments = [...speechFinalSegmentsRef.current];
+      const interimSegments: string[] = [];
+
+      const startIndex =
+        typeof event.resultIndex === 'number' && event.resultIndex >= 0
+          ? event.resultIndex
+          : 0;
 
       for (let i = startIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
         const transcript = result[0]?.transcript?.trim() ?? '';
         if (!transcript) continue;
         if (result.isFinal) {
-          finalUpdate = `${finalUpdate} ${transcript}`.trim();
+          nextFinalSegments[i] = transcript;
         } else {
-          interimUpdate = transcript;
+          interimSegments.push(transcript);
         }
       }
 
-      if (finalUpdate) {
-        speechFinalTextRef.current = mergeSpeechIntoDraft(speechFinalTextRef.current, finalUpdate);
-      }
+      const compactSegments = (segments: string[]) =>
+        segments
+          .map((segment) => segment.trim())
+          .filter(Boolean)
+          .reduce<string[]>((acc, segment) => {
+            const comparable = normalizeComparableText(segment);
+            const previous = acc[acc.length - 1];
+            const previousComparable = previous ? normalizeComparableText(previous) : '';
+            if (!comparable) return acc;
+            if (previousComparable === comparable) return acc;
+            if (previousComparable && comparable.includes(previousComparable)) return [...acc.slice(0, -1), segment];
+            if (previousComparable && previousComparable.includes(comparable)) return acc;
+            return [...acc, segment];
+          }, []);
 
-      const spokenText = `${speechFinalTextRef.current} ${interimUpdate}`.trim();
+      speechFinalSegmentsRef.current = nextFinalSegments;
+      const finalSegments = compactSegments(nextFinalSegments);
+      speechFinalTextRef.current = finalSegments.join(' ');
+      const spokenText = compactSegments([...finalSegments, ...interimSegments]).join(' ');
       const nextText = mergeSpeechIntoDraft(speechBaseTextRef.current, spokenText);
       setTaskDraft((cur) => ({ ...cur, rawIntake: nextText }));
       setSpeechInputStatus('מקשיב ומכניס טקסט לתיבה...');
@@ -618,17 +680,21 @@ export function CreateMissionItemButton({
     const title = scheduleDraft.title.trim();
     if (!title) { setErrorMessage('חובה לתת כותרת ללו״ז.'); return; }
     const date = scheduleDraft.date || todayISO;
+    const tomorrow = addDaysISO(todayISO, 1);
+    const bucket = date === todayISO ? 'today' : 'backlog';
+    const backlogGroup = date === todayISO ? null : date === tomorrow ? 'tomorrow' : 'this_week';
+    const dayLabel = date === todayISO ? 'היום' : date === tomorrow ? 'מחר' : date;
     await onCreateTask({
       title: `לו״ז: ${title}`,
       projectId: scheduleDraft.projectId,
       domainId: scheduleDraft.domainId,
-      bucket: date === todayISO ? 'today' : 'backlog',
+      bucket,
       date, originalDate: date,
-      scheduledTimeLabel: `${date} ${scheduleDraft.startTime}–${scheduleDraft.endTime}`,
+      scheduledTimeLabel: `${dayLabel} ${scheduleDraft.startTime}–${scheduleDraft.endTime}`,
       estimatedDurationMinutes: null,
       durationLabel: `${scheduleDraft.startTime}–${scheduleDraft.endTime}`,
       priority: 'medium', effort: 'medium', isQuickWin: false, isRecurring: false, recurrenceDefinitionId: null,
-      backlogGroup: date === todayISO ? null : 'this_week',
+      backlogGroup,
       tags: ['schedule'],
       whyNow: 'פריט לו״ז מקומי. חיבור Google Calendar יגיע בשלב מאוחר יותר.',
       notes: [scheduleDraft.location ? `מיקום: ${scheduleDraft.location}` : '', scheduleDraft.notes].filter(Boolean).join('\n') || undefined,
@@ -752,6 +818,7 @@ export function CreateMissionItemButton({
                     <TaskFormPanel
                       taskDraft={taskDraft}
                       updateTaskDraft={updateTaskDraft}
+                      todayISO={todayISO}
                       activeProjects={activeProjects}
                       activeDomains={activeDomains}
                       tagOptions={tagOptions}
@@ -837,6 +904,7 @@ export function CreateMissionItemButton({
                 <SchedulePanel
                   scheduleDraft={scheduleDraft}
                   updateScheduleDraft={updateScheduleDraft}
+                  todayISO={todayISO}
                   activeProjects={activeProjects}
                   activeDomains={activeDomains}
                   errorMessage={errorMessage}

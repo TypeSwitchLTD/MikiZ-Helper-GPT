@@ -589,6 +589,59 @@ export function normalizeSpokenText(input: string): string {
   return normalizeSpokenTextWithCommands(input);
 }
 
+function collapseRepeatedSpeechChunks(input: string): string {
+  return input
+    .split('\n')
+    .map((line) => {
+      const words = line.trim().split(/\s+/).filter(Boolean);
+      if (words.length < 3) return line.trim();
+
+      const output: string[] = [];
+      let index = 0;
+
+      while (index < words.length) {
+        let matchedSize = 0;
+        const maxChunkSize = Math.min(8, Math.floor((words.length - index) / 2));
+
+        for (let size = maxChunkSize; size >= 2; size -= 1) {
+          const chunk = words.slice(index, index + size).join(' ');
+          const nextChunk = words.slice(index + size, index + size * 2).join(' ');
+          if (chunk && chunk === nextChunk) {
+            matchedSize = size;
+            break;
+          }
+        }
+
+        if (matchedSize > 0) {
+          const chunk = words.slice(index, index + matchedSize);
+          output.push(...chunk);
+          index += matchedSize;
+          while (words.slice(index, index + matchedSize).join(' ') === chunk.join(' ')) {
+            index += matchedSize;
+          }
+          continue;
+        }
+
+        if (
+          index + 2 < words.length &&
+          words[index] === words[index + 1] &&
+          words[index] === words[index + 2]
+        ) {
+          output.push(words[index]);
+          const repeated = words[index];
+          while (words[index] === repeated) index += 1;
+          continue;
+        }
+
+        output.push(words[index]);
+        index += 1;
+      }
+
+      return output.join(' ');
+    })
+    .join('\n');
+}
+
 function normalizeSpokenTextWithCommands(input: string): string {
   const replacements: Array<[RegExp, string]> = [
     [/\b(line break|go down a line|new line)\b/gi, '\n'],
@@ -638,6 +691,9 @@ function normalizeSpokenTextWithCommands(input: string): string {
     .replace(/\n[ \t]+/g, '\n')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((line) => collapseRepeatedSpeechChunks(line))
+    .join('\n')
     .trim();
 }
 

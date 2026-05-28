@@ -527,7 +527,8 @@ export async function moveTaskToDate(task: Task, targetDate: string): Promise<vo
 }
 
 export async function moveTaskToTomorrow(task: Task): Promise<void> {
-  await moveTaskToDate(task, getTomorrowISO());
+  const today = getTodayISO();
+  await moveTaskToDate(task, getTomorrowISO(new Date(`${today}T12:00:00`)));
 }
 
 export async function cancelTask(taskId: string): Promise<void> {

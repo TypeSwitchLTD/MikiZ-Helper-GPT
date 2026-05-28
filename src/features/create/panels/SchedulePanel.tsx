@@ -1,10 +1,11 @@
 import type { AppSettings } from '../../../domain/settings/settingsTypes';
 import type { ScheduleDraftState } from '../createTaskTypes';
-import { getChoiceClass, getDomainOptionClass, getProjectOptionClass } from '../createTaskUtils';
+import { addDaysISO, getChoiceClass, getDomainOptionClass, getProjectOptionClass } from '../createTaskUtils';
 
 interface SchedulePanelProps {
   scheduleDraft: ScheduleDraftState;
   updateScheduleDraft: <K extends keyof ScheduleDraftState>(key: K, value: ScheduleDraftState[K]) => void;
+  todayISO: string;
   activeProjects: NonNullable<AppSettings['projects']>;
   activeDomains: NonNullable<AppSettings['domains']>;
   errorMessage: string;
@@ -18,6 +19,7 @@ interface SchedulePanelProps {
 export function SchedulePanel({
   scheduleDraft,
   updateScheduleDraft,
+  todayISO,
   activeProjects,
   activeDomains,
   errorMessage,
@@ -27,6 +29,12 @@ export function SchedulePanel({
   onCancel,
   onReset,
 }: SchedulePanelProps) {
+  const tomorrowISO = addDaysISO(todayISO, 1);
+  const quickDateButtonClass = (isActive: boolean) =>
+    `rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${
+      isActive ? 'bg-slate-950 text-white ring-slate-950' : 'bg-slate-50 text-slate-700 ring-slate-200 hover:bg-white'
+    }`;
+
   return (
     <div className="mt-5 space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -41,6 +49,14 @@ export function SchedulePanel({
         <label className="field-card">
           <span>תאריך</span>
           <input type="date" value={scheduleDraft.date} onChange={(e) => updateScheduleDraft('date', e.target.value)} />
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className={quickDateButtonClass(scheduleDraft.date === todayISO)} onClick={() => updateScheduleDraft('date', todayISO)}>
+              היום
+            </button>
+            <button type="button" className={quickDateButtonClass(scheduleDraft.date === tomorrowISO)} onClick={() => updateScheduleDraft('date', tomorrowISO)}>
+              מחר
+            </button>
+          </div>
         </label>
         <label className="field-card">
           <span>מיקום</span>

@@ -425,16 +425,40 @@ export async function importDailyStatePayload(
  * Tasks that were in bucket=today on a previous day and are still open
  * get their date updated to today — so they appear in today's view.
  */
+function shouldPromoteScheduledBacklogTask(task: Task, todayISO: string): boolean {
+  if (
+    task.bucket !== 'backlog' ||
+    !task.date ||
+    task.date > todayISO ||
+    task.completedAt ||
+    task.deletedAt ||
+    task.statusOverride === 'cancelled'
+  ) {
+    return false;
+  }
+
+  // "Tomorrow" is a dated holding lane. Once its date arrives it should become
+  // a Today task instead of staying hidden in backlog.
+  if (task.backlogGroup === 'tomorrow') return true;
+
+  // Custom future dates are usually stored as this_week. Promote only after the
+  // date is stale, so a generic "this week" item created today does not jump in.
+  return task.backlogGroup === 'this_week' && task.date < todayISO;
+}
+
 export async function rolloverStaleTodayTasks(): Promise<number> {
   const todayISO = getTodayISO();
   const staleTasks = await db.tasks
-    .where('bucket').equals('today')
     .filter(
       (task) =>
-        (task.date ?? '') < todayISO &&
-        !task.completedAt &&
-        !task.deletedAt &&
-        task.statusOverride !== 'cancelled',
+        (
+          task.bucket === 'today' &&
+          (task.date ?? '') < todayISO &&
+          !task.completedAt &&
+          !task.deletedAt &&
+          task.statusOverride !== 'cancelled'
+        ) ||
+        shouldPromoteScheduledBacklogTask(task, todayISO),
     )
     .toArray();
 
@@ -444,7 +468,11 @@ export async function rolloverStaleTodayTasks(): Promise<number> {
   await db.tasks.bulkPut(
     staleTasks.map((task) => ({
       ...task,
+      bucket: 'today',
+      backlogGroup: null,
       date: todayISO,
+      movedToDate: todayISO,
+      scheduledTimeLabel: task.scheduledTimeLabel || 'היום',
       movedCount: task.movedCount + 1,
       updatedAt: timestamp,
     })),

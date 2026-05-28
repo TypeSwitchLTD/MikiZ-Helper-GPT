@@ -9,12 +9,14 @@ import {
   getProjectOptionClass,
   priorityOptions,
   sourceOptions,
+  addDaysISO,
 } from '../createTaskUtils';
 import { compactSectionTitle } from '../createTaskHelpers';
 
 interface TaskFormPanelProps {
   taskDraft: TaskDraftState;
   updateTaskDraft: <K extends keyof TaskDraftState>(key: K, value: TaskDraftState[K]) => void;
+  todayISO: string;
   activeProjects: NonNullable<AppSettings['projects']>;
   activeDomains: NonNullable<AppSettings['domains']>;
   tagOptions: string[];
@@ -25,6 +27,7 @@ interface TaskFormPanelProps {
 export function TaskFormPanel({
   taskDraft,
   updateTaskDraft,
+  todayISO,
   activeProjects,
   activeDomains,
   tagOptions,
@@ -33,6 +36,11 @@ export function TaskFormPanel({
 }: TaskFormPanelProps) {
   const chosenProjectName = activeProjects.find((p) => p.id === taskDraft.projectId)?.name ?? 'לא נבחר';
   const chosenDomainName = activeDomains.find((d) => d.id === taskDraft.domainId)?.name ?? 'לא נבחר';
+  const tomorrowISO = addDaysISO(todayISO, 1);
+  const quickDateButtonClass = (isActive: boolean) =>
+    `rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${
+      isActive ? 'bg-slate-950 text-white ring-slate-950' : 'bg-slate-50 text-slate-700 ring-slate-200 hover:bg-white'
+    }`;
 
   return (
     <>
@@ -50,6 +58,14 @@ export function TaskFormPanel({
             <label className="field-card bg-white">
               <span>תאריך</span>
               <input type="date" value={taskDraft.date} onChange={(e) => updateTaskDraft('date', e.target.value)} />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className={quickDateButtonClass(taskDraft.date === todayISO)} onClick={() => updateTaskDraft('date', todayISO)}>
+                  היום
+                </button>
+                <button type="button" className={quickDateButtonClass(taskDraft.date === tomorrowISO)} onClick={() => updateTaskDraft('date', tomorrowISO)}>
+                  מחר
+                </button>
+              </div>
             </label>
             <label className="field-card bg-white">
               <span>תווית זמן</span>

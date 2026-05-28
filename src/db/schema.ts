@@ -7,8 +7,8 @@ import type { AppSettings } from '../domain/settings/settingsTypes';
 import type { Subtask, Task } from '../domain/tasks/taskTypes';
 
 export const DATABASE_NAME = 'mission-control-local';
-export const DATABASE_VERSION = 5;
-export const APP_VERSION = '0.7.9';
+export const DATABASE_VERSION = 6;
+export const APP_VERSION = '0.8.5';
 
 export interface BackupSnapshot {
   id: string;
