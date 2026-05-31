@@ -18,6 +18,7 @@ import { WorkdaySection } from './sections/WorkdaySection';
 import { AutomationSection } from './sections/AutomationSection';
 import { ProjectsSection } from './sections/ProjectsSection';
 import { ConnectDeviceSection } from './ConnectDeviceSection';
+import { PushNotificationsSection } from './PushNotificationsSection';
 
 // ─── Lead table config ────────────────────────────────────────────────────────
 
@@ -642,6 +643,7 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
       case 'connectivity': return (
         <div className="space-y-4">
           <ConnectDeviceSection settings={settings} />
+          <PushNotificationsSection settings={settings} onSaveSettings={onSaveSettings} />
           <ApiSection
             form={form} updateField={updateField}
             leadTableSettings={leadTableSettings} updateLeadTableSetting={updateLeadTableSetting}

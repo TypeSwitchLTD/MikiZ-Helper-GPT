@@ -96,6 +96,7 @@ export function createDefaultSettings(): AppSettings {
         lastCheckedAt: null,
       },
     },
+    pushSubscriptions: [],
     projects: [
       { id: 'timeraligner', name: 'TimerAligner', colorLabel: 'blue', isActive: true },
       { id: 'alignersworld', name: 'AlignersWorld', colorLabel: 'green', isActive: true },

@@ -46,6 +46,18 @@ export interface MetaSettings {
   tokenExpiresAt?: string | null;
 }
 
+export interface PushSubscriptionRecord {
+  endpoint: string;
+  keys?: {
+    p256dh?: string;
+    auth?: string;
+  };
+  deviceLabel?: string;
+  userAgent?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type ColorThemeId = 'slate-sky' | 'indigo-clean' | 'deep-warm';
 
 export interface AppSettings {
@@ -120,6 +132,7 @@ export interface AppSettings {
   socialConnections?: SocialConnectionSettings;
   instantly?: InstantlySettings;
   meta?: MetaSettings;
+  pushSubscriptions?: PushSubscriptionRecord[];
   taskGroupOrder?: string[];
   projects: Project[];
   domains: Domain[];

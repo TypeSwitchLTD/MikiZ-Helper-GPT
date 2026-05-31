@@ -40,7 +40,7 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.5-scheduled-rollover';
+const CLIENT_APP_VERSION = '0.8.6-web-push';
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 interface MissionControlData {
@@ -88,6 +88,22 @@ function removeCloudBootstrapParamsFromUrl() {
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
 }
 
+function mergePushSubscriptions(cloud: AppSettings, local: AppSettings): AppSettings['pushSubscriptions'] {
+  const byEndpoint = new Map<string, NonNullable<AppSettings['pushSubscriptions']>[number]>();
+  [...(cloud.pushSubscriptions ?? []), ...(local.pushSubscriptions ?? [])].forEach((subscription) => {
+    if (!subscription.endpoint) return;
+    const existing = byEndpoint.get(subscription.endpoint);
+    byEndpoint.set(subscription.endpoint, {
+      ...existing,
+      ...subscription,
+      createdAt: existing?.createdAt ?? subscription.createdAt,
+      updatedAt: subscription.updatedAt || existing?.updatedAt || subscription.createdAt,
+    });
+  });
+  return [...byEndpoint.values()]
+    .sort((a, b) => (Date.parse(b.updatedAt) || 0) - (Date.parse(a.updatedAt) || 0))
+    .slice(0, 10);
+}
 
 function mergeCloudWithLocalTokens(cloudPayload: CloudSyncPayload, localSettings: AppSettings | null): CloudSyncPayload {
   if (!localSettings || !cloudPayload.settings) return cloudPayload;
@@ -107,6 +123,7 @@ function mergeCloudWithLocalTokens(cloudPayload: CloudSyncPayload, localSettings
       androidPublishEndpoint: local.morningBriefing?.androidPublishEndpoint || cloud.morningBriefing?.androidPublishEndpoint || '/api/morning-briefing',
     },
     instantly: { apiKey: local.instantly?.apiKey || cloud.instantly?.apiKey },
+    pushSubscriptions: mergePushSubscriptions(cloud, local),
   };
   const tasks = Array.isArray(cloudPayload.tasks) ? cloudPayload.tasks : [];
   const subtasks = Array.isArray(cloudPayload.subtasks) ? cloudPayload.subtasks : [];

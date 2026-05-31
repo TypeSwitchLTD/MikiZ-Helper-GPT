@@ -1,7 +1,7 @@
 {
   "name": "mission-control",
   "private": true,
-  "version": "0.8.5",
+  "version": "0.8.6",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -9,7 +9,8 @@
     "typecheck": "tsc -b --noEmit",
     "preview": "vite preview --host 127.0.0.1",
     "test": "npm run typecheck && npm run test:tombstones && npm run build",
-    "test:tombstones": "node --experimental-strip-types scripts/test-task-tombstone-merge.ts"
+    "test:tombstones": "node --experimental-strip-types scripts/test-task-tombstone-merge.ts",
+    "vapid:keys": "node scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

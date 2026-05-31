@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mission-control-0-7-9-shell';
+const CACHE_NAME = 'mission-control-0-8-6-shell';
 const SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -51,4 +51,26 @@ self.addEventListener('notificationclick', (event) => {
       if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
+});
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { body: event.data?.text?.() || '' };
+  }
+
+  const title = payload.title || 'Mission Control';
+  const options = {
+    body: payload.body || 'התראה מהמערכת מוכנה.',
+    icon: payload.icon || '/icon.svg',
+    badge: payload.badge || '/icon.svg',
+    tag: payload.tag || 'mission-control-push',
+    renotify: Boolean(payload.renotify),
+    data: payload.data || {},
+    silent: Boolean(payload.silent),
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });
