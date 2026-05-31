@@ -63,6 +63,9 @@ export interface SettingsFormState {
   instagramAccessTokenPlaceholder: string;
   instantlyApiKey: string;
   metaAppId: string;
+  shopifyShopDomain: string;
+  shopifyAdminAccessToken: string;
+  googleAnalyticsPropertyId: string;
   taskGroupOrder: string[];
 }
 

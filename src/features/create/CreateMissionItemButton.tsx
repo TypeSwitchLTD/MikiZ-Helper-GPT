@@ -462,6 +462,7 @@ export function CreateMissionItemButton({
       tags,
       whyNow: taskDraft.whyNow.trim() || undefined,
       notes: taskDraft.notes.trim() || undefined,
+      aiConversationUrl: taskDraft.aiConversationUrl.trim() || null,
       statusOverride: null,
       movedToDate: null,
       completedAt: null,
@@ -640,6 +641,7 @@ export function CreateMissionItemButton({
         tags: Array.from(new Set([...taskDraft.tags, ...rowTags, ...autoTags, ...(effort === 'quick' ? ['quick-win'] : [])])),
         whyNow: taskDraft.whyNow.trim() || undefined,
         notes: `נוצר מבדיקת טיוטה. מקור: ${taskDraft.rawIntake.trim()}`,
+        aiConversationUrl: taskDraft.aiConversationUrl.trim() || null,
         statusOverride: null, movedToDate: null, completedAt: null, cancelledAt: null,
         source: taskDraft.source,
         subtasks: (subtasksForGroup.length > 0 ? subtasksForGroup : [groupTitle]).map((s) => ({

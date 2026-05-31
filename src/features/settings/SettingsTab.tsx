@@ -144,6 +144,9 @@ function toFormState(s: AppSettings): SettingsFormState {
     instagramAccessTokenPlaceholder: s.socialConnections?.instagram?.accessTokenPlaceholder ?? '',
     instantlyApiKey: s.instantly?.apiKey ?? '',
     metaAppId: s.meta?.appId ?? '',
+    shopifyShopDomain: s.shopify?.shopDomain ?? '',
+    shopifyAdminAccessToken: s.shopify?.adminAccessToken ?? '',
+    googleAnalyticsPropertyId: s.googleAnalytics?.propertyId ?? '',
     taskGroupOrder: s.taskGroupOrder ?? ['today', 'in_progress', 'quick', 'backlog'],
   };
 }
@@ -484,6 +487,8 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
       },
       instantly: { apiKey: currentForm.instantlyApiKey || undefined },
       meta: { ...settings.meta, appId: currentForm.metaAppId || undefined },
+      shopify: { shopDomain: currentForm.shopifyShopDomain || undefined, adminAccessToken: currentForm.shopifyAdminAccessToken || undefined },
+      googleAnalytics: { propertyId: currentForm.googleAnalyticsPropertyId || undefined },
       taskGroupOrder: currentForm.taskGroupOrder,
       projects: parsedProjects,
       domains: parsedDomains,

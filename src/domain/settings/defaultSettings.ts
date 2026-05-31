@@ -96,6 +96,13 @@ export function createDefaultSettings(): AppSettings {
         lastCheckedAt: null,
       },
     },
+    shopify: {
+      shopDomain: '',
+      adminAccessToken: '',
+    },
+    googleAnalytics: {
+      propertyId: '',
+    },
     pushSubscriptions: [],
     projects: [
       { id: 'timeraligner', name: 'TimerAligner', colorLabel: 'blue', isActive: true },

@@ -24,7 +24,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.6";
+const APP_VERSION = "0.8.8";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -939,6 +939,7 @@ export function AppShell() {
               setSearchQuery("");
             }}
             onCompleteTask={(taskId) => void data.completeExistingTask(taskId)}
+            onCreateTask={data.createTask}
             onSaveSettings={data.saveSettings}
           />
         );

@@ -70,6 +70,15 @@ export function mergeImportedSettingsPreservingLocalSecrets(
       connectedAt: keepLocalNullableString(local.meta?.connectedAt, incoming.meta?.connectedAt) ?? null,
       tokenExpiresAt: keepLocalNullableString(local.meta?.tokenExpiresAt, incoming.meta?.tokenExpiresAt) ?? null,
     },
+    shopify: {
+      ...incoming.shopify,
+      shopDomain: keepLocalString(local.shopify?.shopDomain, incoming.shopify?.shopDomain),
+      adminAccessToken: keepLocalString(local.shopify?.adminAccessToken, incoming.shopify?.adminAccessToken),
+    },
+    googleAnalytics: {
+      ...incoming.googleAnalytics,
+      propertyId: keepLocalString(local.googleAnalytics?.propertyId, incoming.googleAnalytics?.propertyId),
+    },
     pushSubscriptions: mergePushSubscriptions(incoming, local),
   };
 }

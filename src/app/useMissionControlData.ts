@@ -40,7 +40,7 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.6-web-push';
+const CLIENT_APP_VERSION = '0.8.8-ai-conversation-links';
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 interface MissionControlData {
@@ -123,6 +123,15 @@ function mergeCloudWithLocalTokens(cloudPayload: CloudSyncPayload, localSettings
       androidPublishEndpoint: local.morningBriefing?.androidPublishEndpoint || cloud.morningBriefing?.androidPublishEndpoint || '/api/morning-briefing',
     },
     instantly: { apiKey: local.instantly?.apiKey || cloud.instantly?.apiKey },
+    shopify: {
+      ...cloud.shopify,
+      shopDomain: local.shopify?.shopDomain || cloud.shopify?.shopDomain || '',
+      adminAccessToken: local.shopify?.adminAccessToken || cloud.shopify?.adminAccessToken || '',
+    },
+    googleAnalytics: {
+      ...cloud.googleAnalytics,
+      propertyId: local.googleAnalytics?.propertyId || cloud.googleAnalytics?.propertyId || '',
+    },
     pushSubscriptions: mergePushSubscriptions(cloud, local),
   };
   const tasks = Array.isArray(cloudPayload.tasks) ? cloudPayload.tasks : [];
@@ -254,6 +263,15 @@ export function useMissionControlData() {
           androidPublishEndpoint: local.morningBriefing?.androidPublishEndpoint || cloud.morningBriefing?.androidPublishEndpoint || '/api/morning-briefing',
         },
         instantly: { apiKey: local.instantly?.apiKey || cloud.instantly?.apiKey },
+        shopify: {
+          ...cloud.shopify,
+          shopDomain: local.shopify?.shopDomain || cloud.shopify?.shopDomain || '',
+          adminAccessToken: local.shopify?.adminAccessToken || cloud.shopify?.adminAccessToken || '',
+        },
+        googleAnalytics: {
+          ...cloud.googleAnalytics,
+          propertyId: local.googleAnalytics?.propertyId || cloud.googleAnalytics?.propertyId || '',
+        },
       } : (cloud ?? local ?? null);
 
       const mergedPayload = { ...result.payload, settings: mergedSettings };
@@ -487,7 +505,7 @@ export function useMissionControlData() {
   );
 
   const updateExistingTaskText = useCallback(
-    async (taskId: string, patch: { title?: string; whyNow?: string; notes?: string }) => {
+    async (taskId: string, patch: { title?: string; whyNow?: string; notes?: string; aiConversationUrl?: string | null }) => {
       try {
         setIsSaving(true);
         await updateTaskText(taskId, patch);

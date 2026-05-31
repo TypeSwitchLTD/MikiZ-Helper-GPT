@@ -18,10 +18,10 @@ interface TodayTabProps {
   onMoveToTomorrow: (task: Task) => Promise<void> | void;
   onChangeTaskDate: (task: Task, targetDate: string) => Promise<void> | void;
   onCancelTask: (taskId: string) => Promise<void> | void;
-  onUpdateTaskText: (taskId: string, patch: { title?: string; whyNow?: string; notes?: string }) => Promise<void> | void;
-  onUpdateSubtaskText: (subtaskId: string, patch: { title?: string; notes?: string }) => Promise<void> | void;
+  onUpdateTaskText: (taskId: string, patch: { title?: string; whyNow?: string; notes?: string; aiConversationUrl?: string | null }) => Promise<void> | void;
+  onUpdateSubtaskText: (subtaskId: string, patch: { title?: string; notes?: string; aiConversationUrl?: string | null }) => Promise<void> | void;
   onUpdateTaskDetails: (taskId: string, patch: { projectId?: string; domainId?: string; priority?: Task['priority']; effort?: Task['effort']; tags?: string[] }) => Promise<void> | void;
-  onAddSubtaskToTask: (input: { taskId: string; title: string; notes?: string }) => Promise<void> | void;
+  onAddSubtaskToTask: (input: { taskId: string; title: string; notes?: string; aiConversationUrl?: string | null }) => Promise<void> | void;
   onReorderTaskFocus?: (taskId: string, action: 'first' | 'up' | 'down' | 'bottom') => Promise<void> | void;
   onAddReminder?: (input: { taskId: string; subtaskId?: string | null; title: string; date: string; time: string; note?: string }) => Promise<void> | void;
   focusedTaskId?: string | null;

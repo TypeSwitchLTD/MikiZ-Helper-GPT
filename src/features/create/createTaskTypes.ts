@@ -18,6 +18,7 @@ export interface TaskDraftState {
   source: TaskSourceOption;
   whyNow: string;
   notes: string;
+  aiConversationUrl: string;
   tags: string[];
   subtasks: string[];
   rawIntake: string;

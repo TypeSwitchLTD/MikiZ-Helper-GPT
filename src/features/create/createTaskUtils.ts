@@ -73,6 +73,7 @@ export function createEmptyTaskDraft(settings: AppSettings | null, todayISO: str
     source: 'manual',
     whyNow: '',
     notes: '',
+    aiConversationUrl: '',
     tags: [],
     subtasks: [''],
     rawIntake: '',
@@ -80,7 +81,7 @@ export function createEmptyTaskDraft(settings: AppSettings | null, todayISO: str
 }
 
 export function createContinuationTaskDraft(current: TaskDraftState): TaskDraftState {
-  return { ...current, title: '', whyNow: '', notes: '', subtasks: [''], rawIntake: '' };
+  return { ...current, title: '', whyNow: '', notes: '', aiConversationUrl: '', subtasks: [''], rawIntake: '' };
 }
 
 export function createEmptyScheduleDraft(settings: AppSettings | null, todayISO: string): ScheduleDraftState {

@@ -46,6 +46,15 @@ export interface MetaSettings {
   tokenExpiresAt?: string | null;
 }
 
+export interface ShopifySettings {
+  shopDomain?: string;
+  adminAccessToken?: string;
+}
+
+export interface GoogleAnalyticsSettings {
+  propertyId?: string;
+}
+
 export interface PushSubscriptionRecord {
   endpoint: string;
   keys?: {
@@ -132,6 +141,8 @@ export interface AppSettings {
   socialConnections?: SocialConnectionSettings;
   instantly?: InstantlySettings;
   meta?: MetaSettings;
+  shopify?: ShopifySettings;
+  googleAnalytics?: GoogleAnalyticsSettings;
   pushSubscriptions?: PushSubscriptionRecord[];
   taskGroupOrder?: string[];
   projects: Project[];

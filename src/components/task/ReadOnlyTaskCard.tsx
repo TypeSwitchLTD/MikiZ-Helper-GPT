@@ -32,11 +32,11 @@ interface ReadOnlyTaskCardProps {
   onCancelTask?: (taskId: string) => Promise<void> | void;
   onUpdateTaskText?: (
     taskId: string,
-    patch: { title?: string; whyNow?: string; notes?: string },
+    patch: { title?: string; whyNow?: string; notes?: string; aiConversationUrl?: string | null },
   ) => Promise<void> | void;
   onUpdateSubtaskText?: (
     subtaskId: string,
-    patch: { title?: string; notes?: string },
+    patch: { title?: string; notes?: string; aiConversationUrl?: string | null },
   ) => Promise<void> | void;
   onUpdateTaskDetails?: (
     taskId: string,
@@ -52,6 +52,7 @@ interface ReadOnlyTaskCardProps {
     taskId: string;
     title: string;
     notes?: string;
+    aiConversationUrl?: string | null;
   }) => Promise<void> | void;
   onReorderTaskFocus?: (
     taskId: string,
@@ -202,6 +203,32 @@ function focusButtonClass(tone: "strong" | "soft" = "soft"): string {
     : "grid h-8 w-8 place-items-center rounded-full bg-white text-xs font-black text-slate-700 ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-sky-50 hover:text-sky-800 hover:ring-sky-100";
 }
 
+function normalizeAiConversationUrl(value: string | null | undefined): string {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function getAiProviderLabel(value: string | null | undefined): string {
+  const url = normalizeAiConversationUrl(value);
+  if (!url) return "AI";
+  const host = new URL(url).hostname.toLowerCase();
+  if (host.includes("claude.ai")) return "Claude";
+  if (host.includes("chatgpt.com") || host.includes("chat.openai.com")) return "ChatGPT";
+  return "AI";
+}
+
+function openAiConversation(value: string | null | undefined) {
+  const url = normalizeAiConversationUrl(value);
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 export function ReadOnlyTaskCard({
   task,
   subtasks,
@@ -234,6 +261,7 @@ export function ReadOnlyTaskCard({
   const [editTitle, setEditTitle] = useState(task.title);
   const [editWhyNow, setEditWhyNow] = useState(task.whyNow ?? "");
   const [editNotes, setEditNotes] = useState(task.notes ?? "");
+  const [editAiConversationUrl, setEditAiConversationUrl] = useState(task.aiConversationUrl ?? "");
   const [isAddSubtaskOpen, setIsAddSubtaskOpen] = useState(false);
   const [isDetailsEditOpen, setIsDetailsEditOpen] = useState(false);
   const [editProjectId, setEditProjectId] = useState(task.projectId);
@@ -245,8 +273,10 @@ export function ReadOnlyTaskCard({
   const [editTags, setEditTags] = useState<string[]>(task.tags ?? []);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [newSubtaskNotes, setNewSubtaskNotes] = useState("");
+  const [newSubtaskAiConversationUrl, setNewSubtaskAiConversationUrl] = useState("");
   const [showDoneSubtasks, setShowDoneSubtasks] = useState(false);
   const [editedSubtaskTitles, setEditedSubtaskTitles] = useState<Record<string, string>>({});
+  const [editedSubtaskAiLinks, setEditedSubtaskAiLinks] = useState<Record<string, string>>({});
   const [reminderTarget, setReminderTarget] = useState<{
     type: "task" | "subtask";
     subtaskId?: string | null;
@@ -284,6 +314,8 @@ export function ReadOnlyTaskCard({
   const taskReminderLabel = formatShortReminder(taskReminder);
   const isDone = progress.status === "done";
   const isMutedDone = isCompletedArchived && isDone;
+  const taskAiUrl = normalizeAiConversationUrl(task.aiConversationUrl);
+  const taskAiProviderLabel = getAiProviderLabel(taskAiUrl);
   const canUseTaskActions = Boolean(
     onMoveToTomorrow ||
     onChangeTaskDate ||
@@ -298,6 +330,7 @@ export function ReadOnlyTaskCard({
     setEditTitle(task.title);
     setEditWhyNow(task.whyNow ?? "");
     setEditNotes(task.notes ?? "");
+    setEditAiConversationUrl(task.aiConversationUrl ?? "");
     setEditProjectId(task.projectId);
     setEditDomainId(task.domainId);
     setEditPriority(task.priority);
@@ -305,6 +338,7 @@ export function ReadOnlyTaskCard({
     setEditTags(task.tags);
     setTargetDate(task.date ?? "");
     setShowDoneSubtasks(false);
+    setEditedSubtaskAiLinks({});
   }, [task]);
 
   useEffect(() => {
@@ -351,6 +385,7 @@ export function ReadOnlyTaskCard({
       title,
       whyNow: editWhyNow,
       notes: editNotes,
+      aiConversationUrl: normalizeAiConversationUrl(editAiConversationUrl) || null,
     });
     setIsTextEditOpen(false);
   };
@@ -359,6 +394,7 @@ export function ReadOnlyTaskCard({
     setEditTitle(task.title);
     setEditWhyNow(task.whyNow ?? "");
     setEditNotes(task.notes ?? "");
+    setEditAiConversationUrl(task.aiConversationUrl ?? "");
     setIsTextEditOpen(false);
     setActionError("");
   };
@@ -370,10 +406,16 @@ export function ReadOnlyTaskCard({
       setActionError("אי אפשר לשמור תת־משימה בלי טקסט.");
       return;
     }
-    if (nextTitle === subtask.title) return;
+    const nextAiConversationUrl = normalizeAiConversationUrl(editedSubtaskAiLinks[subtask.id] ?? subtask.aiConversationUrl ?? "") || null;
+    if (nextTitle === subtask.title && nextAiConversationUrl === (subtask.aiConversationUrl ?? null)) return;
     setActionError("");
-    await onUpdateSubtaskText(subtask.id, { title: nextTitle });
+    await onUpdateSubtaskText(subtask.id, { title: nextTitle, aiConversationUrl: nextAiConversationUrl });
     setEditedSubtaskTitles((current) => {
+      const next = { ...current };
+      delete next[subtask.id];
+      return next;
+    });
+    setEditedSubtaskAiLinks((current) => {
       const next = { ...current };
       delete next[subtask.id];
       return next;
@@ -477,10 +519,12 @@ export function ReadOnlyTaskCard({
         taskId: task.id,
         title,
         notes: newSubtaskNotes.trim() || undefined,
+        aiConversationUrl: normalizeAiConversationUrl(newSubtaskAiConversationUrl) || null,
       });
     }
     setNewSubtaskTitle("");
     setNewSubtaskNotes("");
+    setNewSubtaskAiConversationUrl("");
     setIsAddSubtaskOpen(false);
   };
 
@@ -610,6 +654,18 @@ export function ReadOnlyTaskCard({
                 </button>
               </div>
             ) : null}
+            {taskAiUrl ? (
+              <button
+                type="button"
+                className="rounded-full bg-cyan-50 px-2 py-0.5 font-black text-cyan-700 ring-1 ring-cyan-100 transition hover:bg-cyan-100 sm:py-1"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openAiConversation(taskAiUrl);
+                }}
+              >
+                {taskAiProviderLabel}
+              </button>
+            ) : null}
             <span
               className={`rounded-full px-2 py-0.5 font-bold ring-1 sm:py-1 ${getStatusBadgeClass(progress)}`}
             >
@@ -678,6 +734,19 @@ export function ReadOnlyTaskCard({
               {task.notes}
             </p>
           ) : null}
+          {taskAiUrl ? (
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 rounded-2xl bg-cyan-50 px-3 py-2 text-right text-xs font-black text-cyan-900 ring-1 ring-cyan-100 transition hover:bg-cyan-100 sm:text-sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                openAiConversation(taskAiUrl);
+              }}
+            >
+              <span>פתח שיחת AI</span>
+              <span className="truncate text-[11px] text-cyan-700">{taskAiProviderLabel}</span>
+            </button>
+          ) : null}
 
           {taskSubtasks.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2 text-[11px] font-black text-slate-600 ring-1 ring-slate-200">
@@ -697,6 +766,11 @@ export function ReadOnlyTaskCard({
                 subtask.id,
               );
               const subtaskReminderLabel = formatShortReminder(subtaskReminder);
+              const subtaskAiUrl = normalizeAiConversationUrl(subtask.aiConversationUrl) || taskAiUrl;
+              const subtaskAiProviderLabel = getAiProviderLabel(subtaskAiUrl);
+              const subtaskAiDraft = editedSubtaskAiLinks[subtask.id] ?? subtask.aiConversationUrl ?? "";
+              const hasSubtaskTextChange = (editedSubtaskTitles[subtask.id] ?? subtask.title) !== subtask.title;
+              const hasSubtaskAiChange = normalizeAiConversationUrl(subtaskAiDraft) !== normalizeAiConversationUrl(subtask.aiConversationUrl);
 
               return (
                 <li
@@ -739,7 +813,7 @@ export function ReadOnlyTaskCard({
                           aria-label="עריכת טקסט תת־משימה"
                         />
                         {onUpdateSubtaskText &&
-                        (editedSubtaskTitles[subtask.id] ?? subtask.title) !== subtask.title ? (
+                        (hasSubtaskTextChange || hasSubtaskAiChange) ? (
                           <button
                             type="button"
                             className="rounded-full bg-emerald-50 px-3 py-2 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100"
@@ -747,6 +821,30 @@ export function ReadOnlyTaskCard({
                             onClick={() => void handleSaveSubtaskText(subtask)}
                           >
                             שמור
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                        <input
+                          className="min-h-9 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 ltr text-left"
+                          value={subtaskAiDraft}
+                          disabled={isSaving || !onUpdateSubtaskText}
+                          onChange={(event) =>
+                            setEditedSubtaskAiLinks((current) => ({
+                              ...current,
+                              [subtask.id]: event.target.value,
+                            }))
+                          }
+                          placeholder={taskAiUrl ? "ריק = משתמש בקישור של משימת העל" : "AI conversation URL"}
+                          aria-label="AI conversation URL"
+                        />
+                        {subtaskAiUrl ? (
+                          <button
+                            type="button"
+                            className="rounded-2xl bg-cyan-50 px-3 py-2 text-[11px] font-black text-cyan-800 ring-1 ring-cyan-100 hover:bg-cyan-100"
+                            onClick={() => openAiConversation(subtaskAiUrl)}
+                          >
+                            {subtaskAiProviderLabel}
                           </button>
                         ) : null}
                       </div>
@@ -864,6 +962,14 @@ export function ReadOnlyTaskCard({
                 </button>
                 <button
                   type="button"
+                  className="rounded-2xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800 ring-1 ring-cyan-100 hover:bg-cyan-100 transition disabled:opacity-40"
+                  disabled={!taskAiUrl}
+                  onClick={() => openAiConversation(taskAiUrl)}
+                >
+                  AI
+                </button>
+                <button
+                  type="button"
                   className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100 transition"
                   disabled={isSaving || !onMoveToTomorrow}
                   onClick={() => void handleMoveTomorrow()}
@@ -925,6 +1031,15 @@ export function ReadOnlyTaskCard({
                           rows={3}
                           value={editNotes}
                           onChange={(event) => setEditNotes(event.target.value)}
+                        />
+                      </label>
+                      <label className="field-compact">
+                        <span>AI conversation link</span>
+                        <input
+                          className="ltr text-left"
+                          value={editAiConversationUrl}
+                          onChange={(event) => setEditAiConversationUrl(event.target.value)}
+                          placeholder="https://chatgpt.com/c/... או https://claude.ai/chat/..."
                         />
                       </label>
                       <div className="flex flex-wrap gap-2">
@@ -1090,6 +1205,15 @@ export function ReadOnlyTaskCard({
                           }
                         />
                       </label>
+                      <label className="field-compact">
+                        <span>AI conversation link</span>
+                        <input
+                          className="ltr text-left"
+                          value={newSubtaskAiConversationUrl}
+                          onChange={(event) => setNewSubtaskAiConversationUrl(event.target.value)}
+                          placeholder={taskAiUrl ? "ריק = משתמש בקישור של משימת העל" : "https://chatgpt.com/c/..."}
+                        />
+                      </label>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -1112,6 +1236,7 @@ export function ReadOnlyTaskCard({
                           onClick={() => {
                             setNewSubtaskTitle("");
                             setNewSubtaskNotes("");
+                            setNewSubtaskAiConversationUrl("");
                             setIsAddSubtaskOpen(false);
                           }}
                         >

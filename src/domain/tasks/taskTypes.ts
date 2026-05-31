@@ -27,6 +27,7 @@ export interface Task {
   tags: string[];
   whyNow?: string;
   notes?: string;
+  aiConversationUrl?: string | null;
   statusOverride?: 'cancelled' | 'moved' | null;
   movedCount: number;
   movedToDate?: string | null;
@@ -51,6 +52,7 @@ export interface Subtask {
   durationLabel?: string;
   toolsNeeded?: string;
   notes?: string;
+  aiConversationUrl?: string | null;
   status: SubtaskStatus;
   startedAt?: string | null;
   completedAt?: string | null;

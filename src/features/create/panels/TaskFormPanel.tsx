@@ -89,6 +89,15 @@ export function TaskFormPanel({
               <span>למה עכשיו?</span>
               <input value={taskDraft.whyNow} onChange={(e) => updateTaskDraft('whyNow', e.target.value)} />
             </label>
+            <label className="field-card md:col-span-2 bg-white">
+              <span>AI conversation link</span>
+              <input
+                className="ltr text-left"
+                value={taskDraft.aiConversationUrl}
+                onChange={(e) => updateTaskDraft('aiConversationUrl', e.target.value)}
+                placeholder="https://chatgpt.com/c/... או https://claude.ai/chat/..."
+              />
+            </label>
           </div>
         </section>
 

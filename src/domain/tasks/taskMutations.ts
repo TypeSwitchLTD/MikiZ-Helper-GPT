@@ -7,7 +7,7 @@ import type { Subtask, SubtaskStatus, Task } from './taskTypes';
 
 export interface CreateTaskInput extends Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'movedCount' | 'source'> {
   source?: Task['source'];
-  subtasks: Array<Pick<Subtask, 'title' | 'domainId' | 'estimatedDurationMinutes' | 'durationLabel' | 'toolsNeeded' | 'notes'>>;
+  subtasks: Array<Pick<Subtask, 'title' | 'domainId' | 'estimatedDurationMinutes' | 'durationLabel' | 'toolsNeeded' | 'notes' | 'aiConversationUrl'>>;
 }
 
 export interface AddSubtaskInput {
@@ -18,6 +18,7 @@ export interface AddSubtaskInput {
   durationLabel?: string;
   toolsNeeded?: string;
   notes?: string;
+  aiConversationUrl?: string | null;
   status?: SubtaskStatus;
 }
 
@@ -44,6 +45,7 @@ export async function createTaskWithSubtasks(input: CreateTaskInput): Promise<Ta
     durationLabel: subtask.durationLabel,
     toolsNeeded: subtask.toolsNeeded,
     notes: subtask.notes,
+    aiConversationUrl: subtask.aiConversationUrl ?? null,
     status: 'not_started',
     startedAt: null,
     completedAt: null,
@@ -94,6 +96,7 @@ export async function addSubtaskToTask(input: AddSubtaskInput): Promise<Subtask>
       durationLabel: input.durationLabel,
       toolsNeeded: input.toolsNeeded,
       notes: input.notes?.trim() || undefined,
+      aiConversationUrl: input.aiConversationUrl?.trim() || null,
       status,
       startedAt: status === 'started' || status === 'done' ? timestamp : null,
       completedAt: status === 'done' ? timestamp : null,
@@ -356,11 +359,12 @@ export async function updateTask(taskId: string, patch: Partial<Task>): Promise<
 }
 
 
-export async function updateTaskText(taskId: string, patch: Pick<Partial<Task>, 'title' | 'whyNow' | 'notes'>): Promise<void> {
-  const normalizedPatch: Pick<Partial<Task>, 'title' | 'whyNow' | 'notes'> = {};
+export async function updateTaskText(taskId: string, patch: Pick<Partial<Task>, 'title' | 'whyNow' | 'notes' | 'aiConversationUrl'>): Promise<void> {
+  const normalizedPatch: Pick<Partial<Task>, 'title' | 'whyNow' | 'notes' | 'aiConversationUrl'> = {};
   if (typeof patch.title === 'string') normalizedPatch.title = patch.title.trim();
   if (typeof patch.whyNow === 'string') normalizedPatch.whyNow = patch.whyNow.trim() || undefined;
   if (typeof patch.notes === 'string') normalizedPatch.notes = patch.notes.trim() || undefined;
+  if (typeof patch.aiConversationUrl === 'string') normalizedPatch.aiConversationUrl = patch.aiConversationUrl.trim() || null;
 
   await db.transaction('rw', db.tasks, db.logs, async () => {
     await db.tasks.update(taskId, { ...normalizedPatch, updatedAt: nowISO() });
@@ -470,7 +474,7 @@ export async function updateSubtaskStatus(subtaskId: string, status: SubtaskStat
 
 export async function updateSubtaskText(
   subtaskId: string,
-  patch: { title?: string; notes?: string },
+  patch: { title?: string; notes?: string; aiConversationUrl?: string | null },
 ): Promise<void> {
   const timestamp = nowISO();
   const title = patch.title?.trim();
@@ -489,6 +493,7 @@ export async function updateSubtaskText(
     };
     if (patch.title !== undefined) updatePatch.title = title;
     if (patch.notes !== undefined) updatePatch.notes = patch.notes;
+    if (patch.aiConversationUrl !== undefined) updatePatch.aiConversationUrl = patch.aiConversationUrl?.trim() || null;
 
     await db.subtasks.update(subtaskId, updatePatch);
     await createLogEvent({

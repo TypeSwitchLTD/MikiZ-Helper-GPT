@@ -59,6 +59,20 @@ export function ApiSection({
           <small className="text-xs font-bold text-slate-500">נדרש לחיבור Instagram Business דרך Facebook Login. App Secret שמור ב-Cloudflare env.</small>
         </label>
 
+        <label className="field-card">
+          <span>Shopify store domain</span>
+          <input className="ltr text-left" value={form.shopifyShopDomain} onChange={(e) => updateField('shopifyShopDomain', e.target.value)} placeholder="your-store.myshopify.com" />
+        </label>
+        <label className="field-card">
+          <span>Shopify Admin access token</span>
+          <input className="ltr text-left" type="password" value={form.shopifyAdminAccessToken} onChange={(e) => updateField('shopifyAdminAccessToken', e.target.value)} placeholder="shpat_..." />
+        </label>
+        <label className="field-card lg:col-span-2">
+          <span>Google Analytics GA4 Property ID</span>
+          <input className="ltr text-left" value={form.googleAnalyticsPropertyId} onChange={(e) => updateField('googleAnalyticsPropertyId', e.target.value)} placeholder="123456789" />
+          <small className="text-xs font-bold text-slate-500">GA4 uses GOOGLE_ANALYTICS_CLIENT_EMAIL and GOOGLE_ANALYTICS_PRIVATE_KEY from Cloudflare env.</small>
+        </label>
+
         <div className="rounded-3xl bg-white p-4 ring-1 ring-slate-200 lg:col-span-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>

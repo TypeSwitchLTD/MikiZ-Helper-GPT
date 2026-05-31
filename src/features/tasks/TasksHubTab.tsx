@@ -32,11 +32,11 @@ interface TasksHubTabProps {
   onCancelTask: (taskId: string) => Promise<void> | void;
   onUpdateTaskText: (
     taskId: string,
-    patch: { title?: string; whyNow?: string; notes?: string },
+    patch: { title?: string; whyNow?: string; notes?: string; aiConversationUrl?: string | null },
   ) => Promise<void> | void;
   onUpdateSubtaskText: (
     subtaskId: string,
-    patch: { title?: string; notes?: string },
+    patch: { title?: string; notes?: string; aiConversationUrl?: string | null },
   ) => Promise<void> | void;
   onUpdateTaskDetails: (
     taskId: string,
@@ -52,6 +52,7 @@ interface TasksHubTabProps {
     taskId: string;
     title: string;
     notes?: string;
+    aiConversationUrl?: string | null;
   }) => Promise<void> | void;
   onReorderTaskFocus?: (
     taskId: string,
