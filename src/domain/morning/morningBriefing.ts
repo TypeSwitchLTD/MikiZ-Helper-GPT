@@ -1,4 +1,5 @@
 import type { AppSettings } from '../settings/settingsTypes';
+import type { Reminder } from '../reminders/reminderTypes';
 import type { Subtask, Task } from '../tasks/taskTypes';
 import { getTaskProgress } from '../tasks/taskProgress';
 import { getSubtasksForTask } from '../tasks/taskSelectors';
@@ -9,9 +10,13 @@ export interface BuildMorningBriefingInput {
   settings: AppSettings | null;
   tasks: Task[];
   subtasks: Subtask[];
+  reminders?: Reminder[];
   leadTaskCount: number;
   weather?: WeatherBrief | null;
 }
+
+// Future morning sources to wire later: Google Calendar, inbox/WhatsApp/LinkedIn,
+// finance/open invoices, people waiting for replies, and project bottlenecks.
 
 export interface BriefingTaskLine {
   id: string;
@@ -136,25 +141,9 @@ function cleanTaskTitle(title: string): string {
     .trim();
 }
 
-const HIGH_PRIORITY_SUFFIXES = [
-  'זה ראשון — לפתוח ולהתחיל.',
-  'חשוב גם זה — אחרי הראשון.',
-  'תגיע לזה עוד היום.',
-];
-
 function getTaskLine(task: BriefingTaskLine, index: number): string {
   const title = cleanTaskTitle(task.title);
-  if (task.status === 'in_progress') {
-    return `${index + 1}. ${title} — כבר בפנים, המשך מאיפה שעצרת.`;
-  }
-  if (task.movedCount >= 2) {
-    return `${index + 1}. ${title} — נדחתה כמה פעמים. הפעם לסגור.`;
-  }
-  if (task.priority === 'high') {
-    const suffix = HIGH_PRIORITY_SUFFIXES[Math.min(index, HIGH_PRIORITY_SUFFIXES.length - 1)];
-    return `${index + 1}. ${title} — ${suffix}`;
-  }
-  return `${index + 1}. ${title} — לפתוח ולעשות צעד אחד קדימה.`;
+  return `${index + 1}. ${title}.`;
 }
 
 function getWeatherLine(weather: WeatherBrief | null | undefined, settings: AppSettings | null): string {
@@ -164,9 +153,9 @@ function getWeatherLine(weather: WeatherBrief | null | undefined, settings: AppS
     const noon = weather.noonTempC != null ? `${weather.noonTempC}°` : null;
     const temps = [morning && `${morning} בבוקר`, noon && `${noon} בצהריים`].filter(Boolean).join(', ');
     const desc = weather.description ? ` ${weather.description}` : '';
-    return `${place} — ${temps}.${desc}`;
+    return `${place}: ${temps}.${desc}`;
   }
-  return `מזג האוויר ב${place} לא נטען. תבדוק לפני שאתה יוצא.`;
+  return `מזג האוויר ב${place} לא נטען.`;
 }
 
 function getMotivationLine(todayISO: string, settings: AppSettings | null): string {
@@ -182,23 +171,135 @@ function getMotivationLine(todayISO: string, settings: AppSettings | null): stri
   return lines[seededIndex(todayISO, lines.length)];
 }
 
-function getReminderLines(input: BuildMorningBriefingInput): string[] {
-  return [
-    'לשתות מים לפני שנכנסים לעבודה.',
-    input.weather?.shabbatLabel && input.weather.shabbatTime
-      ? `${input.weather.shabbatLabel} היום ב${input.weather.shabbatTime}.`
-      : input.leadTaskCount > 0
-        ? 'לידים לא מחכים — לפתוח את זה ראשון.'
-        : 'לבחור משימה אחת מהבאקלוג ולהכניס אותה להיום.',
-  ];
+function isVisibleTask(task: Task): boolean {
+  return !task.deletedAt && task.statusOverride !== 'cancelled' && !task.completedAt && !task.cancelledAt;
+}
+
+function getBacklogTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, limit = 5): BriefingTaskLine[] {
+  const priorityWeight: Record<Task['priority'], number> = { high: 3, medium: 2, low: 1 };
+  const groupWeight: Record<string, number> = { tomorrow: 12, this_week: 8, waiting: 4, later: 1 };
+
+  return tasks
+    .filter(isVisibleTask)
+    .filter((task) => task.bucket === 'backlog' || (task.date != null && task.date > todayISO))
+    .map((task) => {
+      const taskSubtasks = getSubtasksForTask(task.id, subtasks);
+      const progress = getTaskProgress(task, taskSubtasks);
+      return { task, progress };
+    })
+    .filter(({ progress }) => progress.status !== 'done' && progress.status !== 'cancelled')
+    .sort((a, b) => {
+      const scoreA =
+        groupWeight[a.task.backlogGroup ?? 'later'] +
+        priorityWeight[a.task.priority] * 10 +
+        Math.min(a.task.movedCount, 4) * 2;
+      const scoreB =
+        groupWeight[b.task.backlogGroup ?? 'later'] +
+        priorityWeight[b.task.priority] * 10 +
+        Math.min(b.task.movedCount, 4) * 2;
+      return scoreB - scoreA || a.task.title.localeCompare(b.task.title);
+    })
+    .slice(0, limit)
+    .map(({ task, progress }) => ({
+      id: task.id,
+      title: task.title,
+      projectId: task.projectId,
+      domainId: task.domainId,
+      status: progress.status,
+      percent: progress.percent,
+      priority: task.priority,
+      effort: task.effort,
+      movedCount: task.movedCount,
+      tags: task.tags,
+    }));
+}
+
+function formatReminderTime(remindAt: string): string {
+  const raw = remindAt.includes('T') ? remindAt.split('T')[1]?.slice(0, 5) : '';
+  if (raw) return raw;
+  const date = new Date(remindAt);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+}
+
+function getTodayReminderLines(input: BuildMorningBriefingInput): string[] {
+  return (input.reminders ?? [])
+    .filter((reminder) => reminder.status === 'pending')
+    .filter((reminder) => reminder.remindAt.slice(0, 10) === input.todayISO)
+    .sort((a, b) => a.remindAt.localeCompare(b.remindAt))
+    .slice(0, 6)
+    .map((reminder, index) => {
+      const time = formatReminderTime(reminder.remindAt);
+      const note = reminder.note?.trim();
+      return `${index + 1}. ${time ? `${time} - ` : ''}${reminder.title.trim()}${note ? `: ${note}` : ''}.`;
+    });
+}
+
+function getHolidayReminderLines(weather: WeatherBrief | null | undefined): string[] {
+  return (weather?.upcomingHolidays ?? [])
+    .filter((holiday) => holiday.daysUntil >= 0 && holiday.daysUntil <= 3)
+    .map((holiday) => {
+      const prefix =
+        holiday.daysUntil === 0
+          ? 'היום'
+          : holiday.daysUntil === 1
+            ? 'מחר'
+            : holiday.daysUntil === 2
+              ? 'עוד יומיים'
+              : 'עוד 3 ימים';
+      const times = [
+        holiday.candlesTime ? `כניסה ${holiday.candlesTime}` : '',
+        holiday.havdalahTime ? `יציאה ${holiday.havdalahTime}` : '',
+      ].filter(Boolean).join(', ');
+      return `${prefix} ${holiday.name}${times ? `, ${times}` : ''}.`;
+    });
+}
+
+function getOpeningLines(input: BuildMorningBriefingInput, nickname: string): string[] {
+  const morning = input.settings?.morningBriefing;
+  const dayText = formatHebrewDay(input.todayISO);
+  const hebrewDate = formatHebrewCalendarDateLetters(input.todayISO);
+  const lines = [`בוקר טוב ${nickname}.`];
+  if (morning?.includeDate !== false) {
+    lines.push(`היום ${dayText}${hebrewDate ? `, ${hebrewDate}` : ''}.`);
+  }
+  if (morning?.includeWeather !== false) {
+    lines.push(getWeatherLine(input.weather, input.settings));
+  }
+  if (input.weather?.shabbatTime) {
+    lines.push(`${input.weather.shabbatLabel ?? 'שקיעה'} ב-${input.weather.shabbatTime}.`);
+  }
+  return lines;
+}
+
+function getImportantTaskNote(topTasks: BriefingTaskLine[], todayCount: number): string | null {
+  const delayed = topTasks.find((task) => task.movedCount >= 2);
+  if (delayed) return `הערה חשובה: ${cleanTaskTitle(delayed.title)} נדחתה כבר ${delayed.movedCount} פעמים.`;
+  const inProgress = topTasks.find((task) => task.status === 'in_progress');
+  if (inProgress) return `הערה חשובה: ${cleanTaskTitle(inProgress.title)} כבר בתהליך.`;
+  if (todayCount >= 7) return `הערה חשובה: יש ${todayCount} משימות להיום. כדאי לשמור את הפוקוס על הראשונות.`;
+  return null;
+}
+
+function getReminderConclusion(reminderCount: number, holidayCount: number): string | null {
+  if (reminderCount >= 3) return `מסקנה חשובה: יש ${reminderCount} תזכורות היום. לא לפספס את הראשונה.`;
+  if (holidayCount > 0 && reminderCount === 0) return 'מסקנה חשובה: אין תזכורות עבודה להיום, רק תזכורות לוח שנה.';
+  return null;
 }
 
 function getClosing(todayISO: string, settings: AppSettings | null): string {
-  if (settings?.morningBriefing?.closingLine?.trim()) return settings.morningBriefing.closingLine.trim();
+  const customClosing = settings?.morningBriefing?.closingLine?.trim();
+  if (
+    customClosing &&
+    customClosing !== 'יאללה תן בראש אלוף.' &&
+    customClosing !== 'יאללה תן בראש אלוף'
+  ) {
+    return customClosing;
+  }
   const closings = [
-    'יאללה תן בראש אלוף.',
-    'יאללה, צעד ראשון ועולים על היום.',
-    'קדימה מיקי, יום טוב מתחיל בפעולה אחת.',
+    'יום נקי, מיקי. מתחילים.',
+    'זהו. קצר ומסודר. מתחילים.',
+    'קדימה מיקי. דבר ראשון, משימה אחת.',
   ];
   return closings[seededIndex(todayISO, closings.length)];
 }
@@ -231,49 +332,39 @@ export function buildMorningCommandPlan(input: BuildMorningBriefingInput): Morni
 export function buildMorningBriefingText(input: BuildMorningBriefingInput): string {
   const morning = input.settings?.morningBriefing;
   const nickname = morning?.nickname?.trim() || 'מיקי';
-  const narratorVerb = input.settings?.voice?.narratorGender === 'female' ? 'מקריאה' : 'מקריא';
-  const topTasks = pickMorningTasks(input.tasks, input.subtasks, input.todayISO);
-  const quickOpeners = pickMorningTasks(input.tasks.filter((task) => task.effort === 'quick' || task.isQuickWin), input.subtasks, input.todayISO, 2);
-  const dayText = formatHebrewDay(input.todayISO);
-  const hebrewDate = formatHebrewCalendarDateLetters(input.todayISO);
-  const weatherLine = getWeatherLine(input.weather, input.settings);
-  const motivationLine = getMotivationLine(input.todayISO, input.settings);
-  const reminderLines = getReminderLines(input);
+  const visibleTodayCount = input.tasks
+    .filter(isVisibleTask)
+    .filter((task) => task.bucket === 'today' && task.date === input.todayISO)
+    .length;
+  const topTasks = pickMorningTasks(input.tasks.filter(isVisibleTask), input.subtasks, input.todayISO, 6);
+  const backlogTasks = getBacklogTasks(input.tasks, input.subtasks, input.todayISO, 5);
+  const todayReminderLines = getTodayReminderLines(input);
+  const holidayReminderLines = getHolidayReminderLines(input.weather);
+  const reminderLines = [...holidayReminderLines, ...todayReminderLines];
+  const importantNote = getImportantTaskNote(topTasks, visibleTodayCount);
+  const reminderConclusion = getReminderConclusion(todayReminderLines.length, holidayReminderLines.length);
   const taskLines = topTasks.length
     ? topTasks.map((task, index) => getTaskLine(task, index))
-    : ['אין שלוש משימות מוגדרות להיום. תבחר אחת ברורה ותתחיל קטן.'];
+    : ['אין משימות להיום.'];
+  const backlogLines = backlogTasks.length
+    ? backlogTasks.map((task, index) => getTaskLine(task, index))
+    : ['אין משימות Backlog פתוחות להצגה.'];
 
-  const leadLine = input.leadTaskCount > 0
-    ? `יש ${input.leadTaskCount} לידים פתוחים — לא לפתוח הכול, רק לזכור שזה מחכה.`
-    : null;
+  const sections = [
+    morning?.includeGreeting === false ? '' : getOpeningLines(input, nickname).join('\n'),
+    morning?.includeTopTasks === false ? '' : `משימות להיום:\n${taskLines.join('\n')}`,
+    importantNote ?? '',
+    `משימות בקלוג:\n${backlogLines.join('\n')}`,
+    morning?.includeReminders === false
+      ? ''
+      : `תזכורות להיום:\n${reminderLines.length ? reminderLines.join('\n') : 'אין תזכורות להיום.'}`,
+    reminderConclusion ?? '',
+    morning?.includeClosing === false ? '' : getClosing(input.todayISO, input.settings),
+  ];
 
-  const summaryLine = [
-    `היום ${dayText}${hebrewDate ? `, ${hebrewDate}` : ''}.`,
-    topTasks.length > 0 ? `הפוקוס הוא ${cleanTaskTitle(topTasks[0].title)}.` : 'הפוקוס הראשון הוא לבחור משימה אחת ברורה.',
-    quickOpeners.length > 0 ? `יש גם Quick Win: ${cleanTaskTitle(quickOpeners[0].title)}.` : '',
-  ].filter(Boolean).join(' ');
-
-  const sectionMap: Record<string, { enabled: boolean; text: string }> = {
-    greeting: { enabled: morning?.includeGreeting !== false, text: `בוקר טוב ${nickname}. היום ${dayText}${hebrewDate ? `, ${hebrewDate}` : ''}.` },
-    weather: { enabled: morning?.includeWeather !== false, text: weatherLine },
-    motivation: { enabled: morning?.includeMotivation !== false, text: motivationLine },
-    exercise: { enabled: morning?.includeExerciseReminder !== false, text: morning?.exerciseLine || 'קום, תעשה תרגיל בוקר קצר, ותכניס אנרגיה לגוף לפני המסך.' },
-    topTasks: { enabled: morning?.includeTopTasks !== false, text: `המשימות שמחכות להיום:\n${taskLines.join('\n')}` },
-    leads: { enabled: morning?.includeLeads !== false && leadLine !== null, text: leadLine ?? '' },
-    reminders: { enabled: morning?.includeReminders !== false, text: reminderLines.join(' ') },
-    closing: { enabled: morning?.includeClosing !== false, text: getClosing(input.todayISO, input.settings) },
-  };
-
-  const defaultOrder = ['greeting', 'weather', 'motivation', 'exercise', 'topTasks', 'leads', 'reminders', 'closing'];
-  const savedOrder = Array.isArray(morning?.sectionOrder) ? morning.sectionOrder.filter((id) => id !== 'greeting') : [];
-  const rest = [...savedOrder.filter((id) => id in sectionMap), ...defaultOrder.filter((id) => id !== 'greeting' && !savedOrder.includes(id))];
-  const order = ['greeting', ...rest];
-
-  return order
-    .map((id) => sectionMap[id])
-    .filter((section): section is { enabled: boolean; text: string } => Boolean(section))
-    .filter((section) => section.enabled && section.text.trim().length > 0)
-    .map((section) => section.text.trim())
+  return sections
+    .filter((section) => section.trim().length > 0)
+    .map((section) => section.trim())
     .join('\n\n');
 }
 

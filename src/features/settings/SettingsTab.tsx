@@ -107,7 +107,7 @@ function toFormState(s: AppSettings): SettingsFormState {
     voiceNarratorGender: s.voice?.narratorGender ?? 'female',
     morningNickname: s.morningBriefing?.nickname ?? 'מיקי',
     morningMotivationLine: s.morningBriefing?.motivationLine ?? 'לא צריך לנצח את כל היום בבת אחת, רק את הצעד הראשון.',
-    morningClosingLine: s.morningBriefing?.closingLine ?? 'יאללה תן בראש אלוף.',
+    morningClosingLine: s.morningBriefing?.closingLine ?? 'יום נקי, מיקי. מתחילים.',
     morningStyle: s.morningBriefing?.style ?? 'big_brother',
     morningIncludeExerciseReminder: s.morningBriefing?.includeExerciseReminder ?? true,
     morningExerciseLine: s.morningBriefing?.exerciseLine ?? 'קום, תעשה תרגיל בוקר קצר, ותכניס אנרגיה לגוף לפני המסך.',
@@ -120,7 +120,7 @@ function toFormState(s: AppSettings): SettingsFormState {
     morningIncludeTopTasks: s.morningBriefing?.includeTopTasks ?? true,
     morningIncludeLeads: s.morningBriefing?.includeLeads ?? true,
     morningIncludeClosing: s.morningBriefing?.includeClosing ?? true,
-    morningSectionOrder: s.morningBriefing?.sectionOrder ?? ['summary', 'topTasks', 'reminders', 'weather', 'motivation', 'exercise', 'leads', 'greeting', 'closing'],
+    morningSectionOrder: s.morningBriefing?.sectionOrder ?? ['greeting', 'weather', 'topTasks', 'reminders', 'closing'],
     morningAlarmTime: s.morningBriefing?.alarmTime ?? '07:00',
     morningRingtoneUrl: s.morningBriefing?.ringtoneUrl ?? '',
     morningAndroidPublishEndpoint: s.morningBriefing?.androidPublishEndpoint ?? '/api/morning-briefing',
@@ -228,14 +228,10 @@ const SETTINGS_SECTIONS = [
 ] as const;
 
 const MORNING_SECTIONS = [
-  { id: 'summary', label: 'סיכום מצב היום', field: 'morningIncludeSummary' as const },
-  { id: 'topTasks', label: 'משימות בפוקוס', field: 'morningIncludeTopTasks' as const },
-  { id: 'reminders', label: 'תזכורות להיום', field: 'morningIncludeReminders' as const },
-  { id: 'weather', label: 'מזג אוויר / שבת', field: 'morningIncludeWeather' as const },
-  { id: 'motivation', label: 'משפט חיזוק', field: 'morningIncludeMotivation' as const },
-  { id: 'exercise', label: 'תרגיל בוקר', field: 'morningIncludeExerciseReminder' as const },
-  { id: 'leads', label: 'לידים / כסף', field: 'morningIncludeLeads' as const },
-  { id: 'greeting', label: 'בוקר טוב מיקי', field: 'morningIncludeGreeting' as const },
+  { id: 'greeting', label: 'בוקר טוב + תאריך', field: 'morningIncludeGreeting' as const },
+  { id: 'weather', label: 'מזג אוויר + שקיעה / שבת', field: 'morningIncludeWeather' as const },
+  { id: 'topTasks', label: 'משימות להיום', field: 'morningIncludeTopTasks' as const },
+  { id: 'reminders', label: 'תזכורות + חגים', field: 'morningIncludeReminders' as const },
   { id: 'closing', label: 'משפט סיום', field: 'morningIncludeClosing' as const },
 ];
 
@@ -447,7 +443,7 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
       morningBriefing: {
         nickname: currentForm.morningNickname || 'מיקי',
         motivationLine: currentForm.morningMotivationLine || 'לא צריך לנצח את כל היום בבת אחת, רק את הצעד הראשון.',
-        closingLine: currentForm.morningClosingLine || 'יאללה תן בראש אלוף.',
+        closingLine: currentForm.morningClosingLine || 'יום נקי, מיקי. מתחילים.',
         style: currentForm.morningStyle,
         includeExerciseReminder: currentForm.morningIncludeExerciseReminder,
         exerciseLine: currentForm.morningExerciseLine || 'קום, תעשה תרגיל בוקר קצר, ותכניס אנרגיה לגוף לפני המסך.',

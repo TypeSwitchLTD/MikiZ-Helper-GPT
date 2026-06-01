@@ -12,14 +12,29 @@ import {
 } from '../../domain/voice/elevenLabsTts';
 import { normalizeSpeechRate } from '../../domain/voice/speechRate';
 import type { AppSettings } from '../../domain/settings/settingsTypes';
+import type { Reminder } from '../../domain/reminders/reminderTypes';
 import type { Subtask, Task } from '../../domain/tasks/taskTypes';
 
 export type CommandBlock = { time: string; title: string; description: string; tone?: string };
+
+const MORNING_SECTION_PAUSE_MS = 650;
+
+function splitVoiceSections(text: string): string[] {
+  return text
+    .split(/\n\s*\n/g)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 interface UseMorningBriefingInput {
   settings: AppSettings | null;
   tasks: Task[];
   subtasks: Subtask[];
+  reminders: Reminder[];
   todayISO: string;
   leadTaskCount: number;
   appVersion: string;
@@ -71,6 +86,7 @@ export function useMorningBriefing({
   settings,
   tasks,
   subtasks,
+  reminders,
   todayISO,
   leadTaskCount,
   appVersion,
@@ -157,10 +173,11 @@ export function useMorningBriefing({
         settings,
         tasks,
         subtasks,
+        reminders,
         leadTaskCount,
         weather: morningWeather,
       }),
-    [todayISO, settings, tasks, subtasks, leadTaskCount, morningWeather],
+    [todayISO, settings, tasks, subtasks, reminders, leadTaskCount, morningWeather],
   );
 
   const morningBriefingText = morningBriefingTextOverride ?? baseMorningBriefingText;
@@ -172,10 +189,11 @@ export function useMorningBriefing({
         settings,
         tasks,
         subtasks,
+        reminders,
         leadTaskCount,
         weather: morningWeather,
       }),
-    [todayISO, settings, tasks, subtasks, leadTaskCount, morningWeather],
+    [todayISO, settings, tasks, subtasks, reminders, leadTaskCount, morningWeather],
   );
   const voiceStatus = useMemo(() => getElevenLabsConfigStatus(settings).message, [settings]);
 
@@ -235,11 +253,16 @@ export function useMorningBriefing({
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       const preferredVoice = getPreferredVoice();
-      const chunks = text.split(/\n\s*\n/g).map((c) => c.trim()).filter(Boolean);
+      const chunks = splitVoiceSections(text);
       if (chunks.length === 0) return;
       setIsSpeaking(true);
-      let remaining = chunks.length;
-      chunks.forEach((chunk) => {
+      const speakChunk = (index: number) => {
+        if (voiceRunRef.current !== runId) return;
+        const chunk = chunks[index];
+        if (!chunk) {
+          setIsSpeaking(false);
+          return;
+        }
         const utterance = new SpeechSynthesisUtterance(chunk);
         if (preferredVoice) utterance.voice = preferredVoice;
         utterance.lang = preferredVoice?.lang || 'he-IL';
@@ -247,15 +270,14 @@ export function useMorningBriefing({
         utterance.pitch = 0.98;
         utterance.volume = 1;
         utterance.onend = () => {
-          remaining -= 1;
-          if (remaining <= 0 && voiceRunRef.current === runId) setIsSpeaking(false);
+          window.setTimeout(() => speakChunk(index + 1), MORNING_SECTION_PAUSE_MS);
         };
         utterance.onerror = () => {
-          remaining -= 1;
-          if (remaining <= 0 && voiceRunRef.current === runId) setIsSpeaking(false);
+          window.setTimeout(() => speakChunk(index + 1), MORNING_SECTION_PAUSE_MS);
         };
         window.speechSynthesis.speak(utterance);
-      });
+      };
+      speakChunk(0);
     },
     [getPreferredVoice, settings?.voice?.speechRate],
   );
@@ -279,39 +301,48 @@ export function useMorningBriefing({
       }
 
       if (isElevenLabsConfigured(settings)) {
-        setIsGeneratingVoice(true);
-        const result = await createElevenLabsAudioUrl(text, settings);
-        if (voiceRunRef.current !== runId) {
-          if (result.audioUrl) URL.revokeObjectURL(result.audioUrl);
-          return;
-        }
-        setIsGeneratingVoice(false);
-        if (result.ok && result.audioUrl) {
+        const chunks = splitVoiceSections(text);
+        setIsSpeaking(true);
+        for (const chunk of chunks) {
+          if (voiceRunRef.current !== runId) return;
+          setIsGeneratingVoice(true);
+          const result = await createElevenLabsAudioUrl(chunk, settings);
+          setIsGeneratingVoice(false);
+          if (voiceRunRef.current !== runId) {
+            if (result.audioUrl) URL.revokeObjectURL(result.audioUrl);
+            return;
+          }
+          if (!result.ok || !result.audioUrl) {
+            setVoiceError(result.error || 'ElevenLabs לא הצליח ליצור אודיו. נופל לקול דפדפן.');
+            if (voiceRunRef.current === runId) setIsSpeaking(false);
+            speakText(text, runId);
+            return;
+          }
+
           cleanupAudioObjectUrl();
           currentAudioUrlRef.current = result.audioUrl;
           const audio = new Audio(result.audioUrl);
           audio.playbackRate = normalizeSpeechRate(settings?.voice?.speechRate);
           audioRef.current = audio;
-          setIsSpeaking(true);
-          audio.onended = () => {
-            if (voiceRunRef.current === runId) setIsSpeaking(false);
-            cleanupAudioObjectUrl();
-          };
-          audio.onerror = () => {
-            if (voiceRunRef.current === runId) setIsSpeaking(false);
-            cleanupAudioObjectUrl();
-          };
           try {
-            await audio.play();
+            await new Promise<void>((resolve, reject) => {
+              audio.onended = () => resolve();
+              audio.onerror = () => reject(new Error('Audio playback failed'));
+              void audio.play().catch(reject);
+            });
           } catch (error) {
             if (voiceRunRef.current === runId) setIsSpeaking(false);
             setVoiceError(
               error instanceof Error ? error.message : 'הדפדפן חסם את ההשמעה. לחץ שוב על הקריא.',
             );
+            cleanupAudioObjectUrl();
+            return;
           }
-          return;
+          cleanupAudioObjectUrl();
+          if (voiceRunRef.current === runId) await wait(MORNING_SECTION_PAUSE_MS);
         }
-        setVoiceError(result.error || 'ElevenLabs לא הצליח ליצור אודיו. נופל לקול דפדפן.');
+        if (voiceRunRef.current === runId) setIsSpeaking(false);
+        return;
       }
 
       speakText(text, runId);
@@ -338,6 +369,7 @@ export function useMorningBriefing({
       settings,
       tasks,
       subtasks,
+      reminders,
       leadTaskCount,
       weather,
     });
@@ -346,7 +378,7 @@ export function useMorningBriefing({
     setMorningPlayProgress(35);
     await playTextWithEngine(nextText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isGeneratingVoice, isSpeaking, isMorningLoading, settings, todayISO, tasks, subtasks, leadTaskCount, playTextWithEngine]);
+  }, [isGeneratingVoice, isSpeaking, isMorningLoading, settings, todayISO, tasks, subtasks, reminders, leadTaskCount, playTextWithEngine]);
 
   const openMorningBriefing = useCallback(async () => {
     setShowMorningBriefing(true);
@@ -358,6 +390,7 @@ export function useMorningBriefing({
       settings,
       tasks,
       subtasks,
+      reminders,
       leadTaskCount,
       weather,
     });
@@ -366,7 +399,7 @@ export function useMorningBriefing({
     setTimeout(() => {
       void playTextWithEngine(nextText);
     }, 250);
-  }, [settings, todayISO, tasks, subtasks, leadTaskCount, playTextWithEngine]);
+  }, [settings, todayISO, tasks, subtasks, reminders, leadTaskCount, playTextWithEngine]);
 
   const downloadMorningBriefing = useCallback(() => {
     const markdown = buildMorningBriefingMarkdown({
@@ -374,6 +407,7 @@ export function useMorningBriefing({
       settings,
       tasks,
       subtasks,
+      reminders,
       leadTaskCount,
       weather: morningWeather,
     });
@@ -384,7 +418,7 @@ export function useMorningBriefing({
     anchor.download = `mission-control-morning-briefing-${todayISO}.md`;
     anchor.click();
     URL.revokeObjectURL(url);
-  }, [todayISO, settings, tasks, subtasks, leadTaskCount, morningWeather]);
+  }, [todayISO, settings, tasks, subtasks, reminders, leadTaskCount, morningWeather]);
 
   const publishMorningBriefingForAndroid = useCallback(async () => {
     setMorningPublishStatus('');

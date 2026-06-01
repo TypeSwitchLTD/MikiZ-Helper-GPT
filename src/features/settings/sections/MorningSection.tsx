@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { SectionCard } from '../../../components/layout/SectionCard';
 import type { SettingsFormState, UpdateFieldFn, AppSettings } from '../settingsFormTypes';
-import { useDragSort } from '../../../hooks/useDragSort';
 import type { MorningPreviewProps } from '../SettingsTab';
 
 interface MorningSectionItem {
@@ -29,19 +28,8 @@ export function MorningSection({
   onTestElevenLabs,
   morningPreview,
 }: MorningSectionProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [editText, setEditText] = useState('');
-
-  const reorderSection = (from: number, to: number) => {
-    const order = [...form.morningSectionOrder];
-    const [removed] = order.splice(from, 1);
-    order.splice(to, 0, removed);
-    updateField('morningSectionOrder', order);
-  };
-
-  const { dragIdx, dragOverIdx, startTouch, endTouch, startDrag, overDrag, leaveDrag, dropDrag, endDrag } =
-    useDragSort(containerRef, reorderSection);
 
   const handlePreviewToggle = () => {
     if (previewOpen) {
@@ -103,22 +91,13 @@ export function MorningSection({
       )}
       <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
         <div className="rounded-3xl bg-slate-50 p-4 ring-1 ring-slate-200">
-          <h3 className="text-lg font-black text-slate-950">סדר נאום הבוקר</h3>
-          <p className="mt-1 text-xs font-bold text-slate-500">גרור לשינוי סדר. checkbox מסיר סעיף מהנאום.</p>
-          <div className="mt-3 grid gap-2" ref={containerRef}>
+          <h3 className="text-lg font-black text-slate-950">חלקים בנאום הבוקר</h3>
+          <p className="mt-1 text-xs font-bold text-slate-500">checkbox מסיר סעיף. הסדר קבוע: פתיח, משימות, בקלוג, תזכורות וסיום.</p>
+          <div className="mt-3 grid gap-2">
             {orderedMorningSections.map((section, index) => (
               <div
                 key={section.id}
-                data-drag-idx={index}
-                draggable
-                onDragStart={() => startDrag(index)}
-                onDragOver={(e) => overDrag(e, index)}
-                onDragLeave={leaveDrag}
-                onDrop={() => dropDrag(index)}
-                onDragEnd={endDrag}
-                onTouchStart={() => startTouch(index)}
-                onTouchEnd={endTouch}
-                className={`grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-2xl bg-white p-2 ring-1 transition cursor-grab active:cursor-grabbing select-none ${dragOverIdx === index && dragIdx !== index ? 'ring-sky-400 bg-sky-50' : 'ring-slate-200'} ${dragIdx === index ? 'opacity-50' : ''}`}
+                className="grid grid-cols-[auto_1fr] items-center gap-2 rounded-2xl bg-white p-2 ring-1 ring-slate-200 transition select-none"
               >
                 <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-100 text-xs font-black text-slate-700">{index + 1}</span>
                 <label className="flex items-center gap-2 text-sm font-black text-slate-900">
@@ -129,7 +108,6 @@ export function MorningSection({
                   />
                   {section.label}
                 </label>
-                <span className="select-none text-slate-300 text-lg px-1">⠿</span>
               </div>
             ))}
           </div>
@@ -168,6 +146,13 @@ export function MorningSection({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-3xl bg-slate-50 p-4 text-sm font-bold text-slate-600 ring-1 ring-slate-200">
+        <p className="font-black text-slate-950">מקורות להמשך פיתוח</p>
+        <p className="mt-1">
+          Google Calendar, מיילים/WhatsApp/LinkedIn, כסף פתוח, אנשים שמחכים לתשובה, וצווארי בקבוק בפרויקטים.
+        </p>
       </div>
 
       <div className="mt-4 grid gap-4 rounded-3xl bg-emerald-50 p-4 ring-1 ring-emerald-100 lg:grid-cols-2">

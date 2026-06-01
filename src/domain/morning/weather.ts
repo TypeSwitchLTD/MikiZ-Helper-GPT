@@ -93,12 +93,12 @@ function describeWeatherCode(code: number | null | undefined): string {
 
 function describeTemperature(noonTemp: number | null, codeDescription: string): string {
   const weatherDesc = codeDescription ? `${codeDescription}. ` : '';
-  if (noonTemp == null) return `${weatherDesc}תבדוק רגע לפני יציאה כדי לא להיות מופתע.`;
-  if (noonTemp >= 34) return `${weatherDesc}חם מאוד, תלבש קל ותשתה מים.`;
-  if (noonTemp >= 28) return `${weatherDesc}חם, תלבש קל ואל תשכח מים.`;
-  if (noonTemp >= 22) return `${weatherDesc}נעים עד חמים, יום טוב להתחיל בתנועה.`;
-  if (noonTemp >= 16) return `${weatherDesc}נעים, אולי שכבה קלה בבוקר.`;
-  return `${weatherDesc}קריר, קח שכבה נוחה לבוקר.`;
+  if (noonTemp == null) return weatherDesc.trim();
+  if (noonTemp >= 34) return `${weatherDesc}חם מאוד.`;
+  if (noonTemp >= 28) return `${weatherDesc}חם.`;
+  if (noonTemp >= 22) return `${weatherDesc}נעים עד חמים.`;
+  if (noonTemp >= 16) return `${weatherDesc}נעים.`;
+  return `${weatherDesc}קריר.`;
 }
 
 function formatLocalTime(value: string | null | undefined): string | null {

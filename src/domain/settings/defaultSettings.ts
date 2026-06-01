@@ -48,7 +48,7 @@ export function createDefaultSettings(): AppSettings {
     morningBriefing: {
       nickname: 'מיקי',
       motivationLine: 'לא צריך לנצח את כל היום בבת אחת, רק את הצעד הראשון.',
-      closingLine: 'יאללה תן בראש אלוף.',
+      closingLine: 'יום נקי, מיקי. מתחילים.',
       style: 'big_brother',
       includeExerciseReminder: true,
       exerciseLine: 'קום, תעשה תרגיל בוקר קצר, ותכניס אנרגיה לגוף לפני המסך.',
@@ -61,7 +61,7 @@ export function createDefaultSettings(): AppSettings {
       includeTopTasks: true,
       includeLeads: true,
       includeClosing: true,
-      sectionOrder: ['summary', 'topTasks', 'reminders', 'weather', 'motivation', 'exercise', 'leads', 'greeting', 'closing'],
+      sectionOrder: ['greeting', 'weather', 'topTasks', 'reminders', 'closing'],
       alarmTime: '07:00',
       ringtoneUrl: '',
       androidPublishEndpoint: '/api/morning-briefing',

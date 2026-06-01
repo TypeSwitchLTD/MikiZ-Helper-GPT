@@ -24,7 +24,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.8";
+const APP_VERSION = "0.8.9";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -381,6 +381,7 @@ export function AppShell() {
     settings: data.settings,
     tasks: data.tasks,
     subtasks: data.subtasks,
+    reminders: data.reminders,
     todayISO: data.todayISO,
     leadTaskCount,
     appVersion: APP_VERSION,
