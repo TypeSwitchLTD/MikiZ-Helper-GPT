@@ -17,17 +17,19 @@ import type { Subtask, Task } from '../../domain/tasks/taskTypes';
 
 export type CommandBlock = { time: string; title: string; description: string; tone?: string };
 
-const MORNING_SECTION_PAUSE_MS = 650;
-
-function splitVoiceSections(text: string): string[] {
+function prepareTextForVoice(text: string): string {
   return text
-    .split(/\n\s*\n/g)
-    .map((chunk) => chunk.trim())
-    .filter(Boolean);
+    .replace(/\r/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .replace(/\n/g, '. ')
+    .replace(/\.\s*\./g, '.')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function splitVoiceSections(text: string): string[] {
+  const prepared = prepareTextForVoice(text);
+  return prepared ? [prepared] : [];
 }
 
 interface UseMorningBriefingInput {
@@ -270,10 +272,10 @@ export function useMorningBriefing({
         utterance.pitch = 0.98;
         utterance.volume = 1;
         utterance.onend = () => {
-          window.setTimeout(() => speakChunk(index + 1), MORNING_SECTION_PAUSE_MS);
+          speakChunk(index + 1);
         };
         utterance.onerror = () => {
-          window.setTimeout(() => speakChunk(index + 1), MORNING_SECTION_PAUSE_MS);
+          speakChunk(index + 1);
         };
         window.speechSynthesis.speak(utterance);
       };
@@ -339,7 +341,6 @@ export function useMorningBriefing({
             return;
           }
           cleanupAudioObjectUrl();
-          if (voiceRunRef.current === runId) await wait(MORNING_SECTION_PAUSE_MS);
         }
         if (voiceRunRef.current === runId) setIsSpeaking(false);
         return;

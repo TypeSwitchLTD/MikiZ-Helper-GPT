@@ -149,8 +149,8 @@ function getTaskLine(task: BriefingTaskLine, index: number): string {
 function getWeatherLine(weather: WeatherBrief | null | undefined, settings: AppSettings | null): string {
   const place = weather?.cityLabel || settings?.location.label || settings?.location.city || 'אצלך';
   if (weather?.morningTempC != null || weather?.noonTempC != null) {
-    const morning = weather.morningTempC != null ? `${weather.morningTempC}°` : null;
-    const noon = weather.noonTempC != null ? `${weather.noonTempC}°` : null;
+    const morning = weather.morningTempC != null ? `${weather.morningTempC} מעלות` : null;
+    const noon = weather.noonTempC != null ? `${weather.noonTempC} מעלות` : null;
     const temps = [morning && `${morning} בבוקר`, noon && `${noon} בצהריים`].filter(Boolean).join(', ');
     const desc = weather.description ? ` ${weather.description}` : '';
     return `${place}: ${temps}.${desc}`;
@@ -214,12 +214,14 @@ function getBacklogTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, l
     }));
 }
 
-function formatReminderTime(remindAt: string): string {
+function getReminderDayPart(remindAt: string): string {
   const raw = remindAt.includes('T') ? remindAt.split('T')[1]?.slice(0, 5) : '';
-  if (raw) return raw;
-  const date = new Date(remindAt);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+  const hour = raw ? Number(raw.slice(0, 2)) : new Date(remindAt).getHours();
+  if (!Number.isFinite(hour)) return '';
+  if (hour < 11) return 'בבוקר';
+  if (hour < 16) return 'בצהריים';
+  if (hour < 20) return 'בערב';
+  return 'בלילה';
 }
 
 function getTodayReminderLines(input: BuildMorningBriefingInput): string[] {
@@ -229,9 +231,9 @@ function getTodayReminderLines(input: BuildMorningBriefingInput): string[] {
     .sort((a, b) => a.remindAt.localeCompare(b.remindAt))
     .slice(0, 6)
     .map((reminder, index) => {
-      const time = formatReminderTime(reminder.remindAt);
+      const dayPart = getReminderDayPart(reminder.remindAt);
       const note = reminder.note?.trim();
-      return `${index + 1}. ${time ? `${time} - ` : ''}${reminder.title.trim()}${note ? `: ${note}` : ''}.`;
+      return `${index + 1}. ${dayPart ? `${dayPart} - ` : ''}${reminder.title.trim()}${note ? `: ${note}` : ''}.`;
     });
 }
 
@@ -289,13 +291,7 @@ function getReminderConclusion(reminderCount: number, holidayCount: number): str
 
 function getClosing(todayISO: string, settings: AppSettings | null): string {
   const customClosing = settings?.morningBriefing?.closingLine?.trim();
-  if (
-    customClosing &&
-    customClosing !== 'יאללה תן בראש אלוף.' &&
-    customClosing !== 'יאללה תן בראש אלוף'
-  ) {
-    return customClosing;
-  }
+  if (customClosing) return customClosing;
   const closings = [
     'יום נקי, מיקי. מתחילים.',
     'זהו. קצר ומסודר. מתחילים.',
@@ -365,7 +361,7 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
   return sections
     .filter((section) => section.trim().length > 0)
     .map((section) => section.trim())
-    .join('\n\n');
+    .join('\n');
 }
 
 export function buildMorningBriefingMarkdown(input: BuildMorningBriefingInput): string {
