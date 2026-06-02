@@ -3,6 +3,8 @@ import { getAllLocalData, importDailyStatePayload, initializeLocalDatabase, roll
 import { hasCloudSyncToken, pullCloudSyncPayload, pushCloudSyncPayload, type CloudSyncPayload } from '../domain/cloud/cloudSync';
 import { db } from '../db/db';
 import type { DailyPlan, DailyPlanBlock } from '../domain/dailyPlans/dailyPlanTypes';
+import { addSubtaskToFocus, addTaskToFocus, clearFocusItems, completeFocusItem, removeFocusItem } from '../domain/focus/focusMutations';
+import type { FocusItem } from '../domain/focus/focusTypes';
 import type { LogEvent } from '../domain/logs/logTypes';
 import { replaceRecurringDefinitionsFromTaskImport, softDeleteAllRecurringDefinitions } from '../domain/recurring/recurringMutations';
 import type { RecurringTaskDefinition } from '../domain/recurring/recurringTypes';
@@ -24,6 +26,7 @@ import {
   deleteLastDailyReportImport,
   createTaskWithSubtasks,
   moveTaskToDate,
+  moveTaskToBacklogGroup,
   moveTaskToTomorrow,
   updateSubtaskStatus,
   updateSubtaskText,
@@ -34,13 +37,13 @@ import {
   type FocusOrderAction,
   type CreateTaskInput,
 } from '../domain/tasks/taskMutations';
-import type { Subtask, Task } from '../domain/tasks/taskTypes';
+import type { BacklogGroup, Subtask, Task } from '../domain/tasks/taskTypes';
 import { getTaskProgress } from '../domain/tasks/taskProgress';
 import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/tasks/taskSelectors';
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.10-morning-briefing-voice';
+const CLIENT_APP_VERSION = '0.8.14-focus-deck';
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 interface MissionControlData {
@@ -51,6 +54,7 @@ interface MissionControlData {
   reports: DailyReport[];
   logs: LogEvent[];
   reminders: Reminder[];
+  focusItems: FocusItem[];
   settings: AppSettings | null;
   habits: DailyHabit[];
   habitLogs: DailyHabitLog[];
@@ -64,6 +68,7 @@ const emptyData: MissionControlData = {
   reports: [],
   logs: [],
   reminders: [],
+  focusItems: [],
   settings: null,
   habits: [],
   habitLogs: [],
@@ -152,6 +157,7 @@ function buildCloudSyncPayload(localData: MissionControlData): CloudSyncPayload 
     reports: localData.reports,
     logs: localData.logs,
     reminders: localData.reminders,
+    focusItems: localData.focusItems,
     settings: localData.settings,
   };
 }
@@ -586,6 +592,22 @@ export function useMissionControlData() {
     [reloadDataAndPushCloud],
   );
 
+  const moveTaskBacklogGroup = useCallback(
+    async (task: Task, backlogGroup: BacklogGroup) => {
+      try {
+        setIsSaving(true);
+        await moveTaskToBacklogGroup(task, backlogGroup);
+        await reloadDataAndPushCloud();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Unknown backlog group move error');
+        throw saveError;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
   const cancelExistingTask = useCallback(
     async (taskId: string) => {
       try {
@@ -786,6 +808,83 @@ export function useMissionControlData() {
     }
   }, [reloadDataAndPushCloud]);
 
+  const addTaskToFocusDeck = useCallback(
+    async (taskId: string) => {
+      try {
+        setIsSaving(true);
+        await addTaskToFocus(taskId);
+        await reloadDataAndPushCloud();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Unknown focus add error');
+        throw saveError;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addSubtaskToFocusDeck = useCallback(
+    async (taskId: string, subtaskId: string) => {
+      try {
+        setIsSaving(true);
+        await addSubtaskToFocus(taskId, subtaskId);
+        await reloadDataAndPushCloud();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Unknown focus subtask add error');
+        throw saveError;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const removeFocusDeckItem = useCallback(
+    async (focusItemId: string) => {
+      try {
+        setIsSaving(true);
+        await removeFocusItem(focusItemId);
+        await reloadDataAndPushCloud();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Unknown focus remove error');
+        throw saveError;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const clearFocusDeck = useCallback(async () => {
+    try {
+      setIsSaving(true);
+      await clearFocusItems();
+      await reloadDataAndPushCloud();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unknown focus clear error');
+      throw saveError;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [reloadDataAndPushCloud]);
+
+  const completeFocusDeckItem = useCallback(
+    async (focusItemId: string) => {
+      try {
+        setIsSaving(true);
+        await completeFocusItem(focusItemId);
+        await reloadDataAndPushCloud();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Unknown focus complete error');
+        throw saveError;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
   const importRecurringDefinitions = useCallback(
     async (payload: unknown) => {
       try {
@@ -938,6 +1037,7 @@ export function useMissionControlData() {
     completeExistingTask,
     changeTaskDate,
     moveTaskTomorrow,
+    moveTaskBacklogGroup,
     cancelExistingTask,
     reorderTaskFocus,
     addReminder,
@@ -957,5 +1057,10 @@ export function useMissionControlData() {
     changeHabitOrder,
     nudgeHabitCount,
     clearAllTasks,
+    addTaskToFocusDeck,
+    addSubtaskToFocusDeck,
+    removeFocusDeckItem,
+    clearFocusDeck,
+    completeFocusDeckItem,
   };
 }

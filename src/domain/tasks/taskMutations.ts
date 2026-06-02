@@ -3,7 +3,7 @@ import { getTodayISO, nowISO, getTomorrowISO } from '../../utils/dates';
 import { createId } from '../../utils/ids';
 import { createLogEvent } from '../logs/logService';
 import type { DailyReportImportTaskDraft } from '../import/dailyReportImport';
-import type { Subtask, SubtaskStatus, Task } from './taskTypes';
+import type { BacklogGroup, Subtask, SubtaskStatus, Task } from './taskTypes';
 
 export interface CreateTaskInput extends Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'movedCount' | 'source'> {
   source?: Task['source'];
@@ -534,6 +534,49 @@ export async function moveTaskToDate(task: Task, targetDate: string): Promise<vo
 export async function moveTaskToTomorrow(task: Task): Promise<void> {
   const today = getTodayISO();
   await moveTaskToDate(task, getTomorrowISO(new Date(`${today}T12:00:00`)));
+}
+
+export async function moveTaskToBacklogGroup(task: Task, backlogGroup: BacklogGroup): Promise<void> {
+  const today = getTodayISO();
+  const tomorrow = getTomorrowISO(new Date(`${today}T12:00:00`));
+  const timestamp = nowISO();
+  const targetDate =
+    backlogGroup === 'tomorrow'
+      ? tomorrow
+      : backlogGroup === 'later'
+        ? task.date
+        : task.date && task.date > today
+          ? task.date
+          : today;
+  const scheduledTimeLabel =
+    backlogGroup === 'tomorrow'
+      ? 'מחר'
+      : backlogGroup === 'this_week'
+        ? 'השבוע'
+        : backlogGroup === 'waiting'
+          ? 'ממתין'
+          : 'בהמשך';
+
+  await db.transaction('rw', db.tasks, db.logs, async () => {
+    await db.tasks.update(task.id, {
+      bucket: 'backlog',
+      backlogGroup,
+      date: targetDate ?? null,
+      scheduledTimeLabel,
+      focusOrder: null,
+      focusUpdatedAt: null,
+      movedToDate: targetDate ?? null,
+      movedCount: task.movedCount + 1,
+      updatedAt: timestamp,
+    });
+    await createLogEvent({
+      type: 'task_moved',
+      entityType: 'task',
+      entityId: task.id,
+      message: `Task moved to backlog group: ${backlogGroup}`,
+      metadata: { fromDate: task.date, toDate: targetDate ?? null, backlogGroup },
+    });
+  });
 }
 
 export async function cancelTask(taskId: string): Promise<void> {

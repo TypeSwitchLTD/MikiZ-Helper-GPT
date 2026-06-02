@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { DailyPlan } from '../domain/dailyPlans/dailyPlanTypes';
+import type { FocusItem } from '../domain/focus/focusTypes';
 import type { LogEvent } from '../domain/logs/logTypes';
 import type { RecurringTaskDefinition } from '../domain/recurring/recurringTypes';
 import type { DailyReport } from '../domain/reports/reportTypes';
@@ -27,6 +28,7 @@ export class MissionControlDatabase extends Dexie {
   snapshots!: Table<BackupSnapshot, string>;
   habits!: Table<DailyHabit, string>;
   habitLogs!: Table<DailyHabitLog, string>;
+  focusItems!: Table<FocusItem, string>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -141,6 +143,30 @@ export class MissionControlDatabase extends Dexie {
       habits: 'id, active, order, createdAt, updatedAt',
       habitLogs: 'id, habitId, date, [habitId+date], createdAt',
     });
+
+    this.version(7).stores({
+      tasks: 'id, bucket, date, projectId, domainId, originalDate, movedToDate, focusOrder, createdAt, updatedAt',
+      subtasks: 'id, taskId, status, sortOrder, createdAt, updatedAt',
+      dailyPlans: 'id, date, createdAt, updatedAt',
+      recurringDefinitions: 'id, isActive, frequency, projectId, domainId, createdAt, updatedAt',
+      reports: 'id, date, generatedAt, createdAt, updatedAt',
+      logs: 'id, timestamp, type, entityType, entityId',
+      reminders: 'id, remindAt, taskId, subtaskId, status, createdAt, updatedAt',
+      settings: 'id',
+      snapshots: 'id, createdAt, reason',
+      habits: 'id, active, order, createdAt, updatedAt',
+      habitLogs: 'id, habitId, date, [habitId+date], createdAt',
+      focusItems: 'id, targetType, taskId, subtaskId, sortOrder, addedAt, updatedAt, deletedAt, completedAt',
+    }).upgrade(async (tx) => {
+      try {
+        await tx.table('logs').add({
+          id: createId('log'), timestamp: nowISO(), type: 'note_added',
+          entityType: 'system', entityId: null,
+          message: 'Database migrated to 0.8.14 - added focus deck',
+          metadata: { appVersion: APP_VERSION, migration: 'v7-focus-items' },
+        });
+      } catch { /* never block db open */ }
+    });
   }
 }
 
@@ -164,7 +190,7 @@ async function seedDatabaseIfNeeded(): Promise<void> {
 
   await db.transaction(
     'rw',
-    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders],
+    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.focusItems],
     async () => {
       await db.settings.put(settings);
 
@@ -201,7 +227,7 @@ async function seedDatabaseIfNeeded(): Promise<void> {
         const snapshots = await db.snapshots.toArray();
         const hasCurrentVersionSnapshot = snapshots.some((snapshot) => snapshot.reason === 'app_update' && snapshot.appVersion === APP_VERSION);
         if (!hasCurrentVersionSnapshot) {
-          const [tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders] = await Promise.all([
+          const [tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, focusItems] = await Promise.all([
             db.tasks.toArray(),
             db.subtasks.toArray(),
             db.dailyPlans.toArray(),
@@ -209,13 +235,14 @@ async function seedDatabaseIfNeeded(): Promise<void> {
             db.reports.toArray(),
             db.logs.toArray(),
             db.reminders.toArray(),
+            db.focusItems.toArray(),
           ]);
           await db.snapshots.add({
             id: createId('snapshot'),
             createdAt: timestamp,
             reason: 'app_update',
             appVersion: APP_VERSION,
-            data: { tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings },
+            data: { tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, focusItems, settings },
           });
         }
       }
@@ -243,6 +270,7 @@ async function seedDatabaseIfNeeded(): Promise<void> {
             reports: [],
             logs: [],
             reminders: [],
+            focusItems: [],
             settings,
           },
         });
@@ -256,7 +284,7 @@ interface GetAllLocalDataOptions {
 }
 
 export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
-  const [rawTasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs] = await Promise.all([
+  const [rawTasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs, focusItems] = await Promise.all([
     db.tasks.orderBy('createdAt').toArray(),
     db.subtasks.orderBy('sortOrder').toArray(),
     db.dailyPlans.orderBy('date').toArray(),
@@ -267,6 +295,7 @@ export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
     db.settings.get('default'),
     db.habits.orderBy('order').toArray(),
     db.habitLogs.orderBy('date').toArray(),
+    db.focusItems.orderBy('sortOrder').toArray(),
   ]);
 
   const allTasks = rawTasks.map(normalizeTask);
@@ -284,6 +313,7 @@ export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
     reports,
     logs,
     reminders,
+    focusItems: options.includeDeleted ? focusItems : focusItems.filter((item) => !item.deletedAt),
     settings: settings ?? createDefaultSettings(),
     habits,
     habitLogs,
@@ -303,6 +333,7 @@ interface DailyStateImportPayload {
   reports?: DailyReport[];
   logs?: LogEvent[];
   reminders?: Reminder[];
+  focusItems?: FocusItem[];
   settings?: AppSettings | null;
 }
 
@@ -337,15 +368,16 @@ export async function importDailyStatePayload(
   const reports = asArray(payload.reports);
   const logs = asArray(payload.logs);
   const reminders = asArray(payload.reminders);
+  const focusItems = asArray(payload.focusItems);
   const settings = payload.settings ?? undefined;
 
-  if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0 && !settings) {
+  if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0 && focusItems.length === 0 && !settings) {
     throw new Error('Daily State JSON לא מכיל משימות / תתי־משימות / תוכניות יום לייבוא.');
   }
 
   await db.transaction(
     'rw',
-    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.habits, db.habitLogs],
+    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.habits, db.habitLogs, db.focusItems],
     async () => {
       const beforeImport = await getAllLocalData();
       await db.snapshots.add({
@@ -403,6 +435,16 @@ export async function importDailyStatePayload(
       if (reports.length) await db.reports.bulkPut(reports);
       if (logs.length) await db.logs.bulkPut(logs);
       if (reminders.length) await db.reminders.bulkPut(reminders);
+      if (focusItems.length) {
+        const existingFocusItems = await db.focusItems.bulkGet(focusItems.map((item) => item.id));
+        const mergedFocusItems = focusItems.map((item, index) => {
+          const existing = existingFocusItems[index];
+          if (existing?.deletedAt && !item.deletedAt) return existing;
+          if (existing?.completedAt && !item.completedAt) return existing;
+          return item;
+        });
+        await db.focusItems.bulkPut(mergedFocusItems);
+      }
 
       await db.logs.add({
         id: createId('log'),

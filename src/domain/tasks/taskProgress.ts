@@ -13,6 +13,10 @@ export function getTaskProgress(task: Task, subtasks: Subtask[]): TaskProgress {
     return { status: 'cancelled', percent: 0, startedCount: 0, doneCount: 0, totalCount: 0 };
   }
 
+  if (task.completedAt) {
+    return { status: 'done', percent: 100, startedCount: 0, doneCount: 0, totalCount: 0 };
+  }
+
   if (task.statusOverride === 'cancelled') {
     return { status: 'cancelled', percent: 0, startedCount: 0, doneCount: 0, totalCount: 0 };
   }

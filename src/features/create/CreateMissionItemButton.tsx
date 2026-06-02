@@ -29,6 +29,7 @@ import {
   inferProjectDomainFromText,
   mergeSpeechIntoDraft,
   normalizeComparableText,
+  normalizeSpokenText,
   parseIntakeText,
   scoreTaskMatch,
   suggestTagsFromText,
@@ -53,6 +54,7 @@ interface CreateMissionItemButtonProps {
 }
 
 const INTAKE_HISTORY_KEY = 'mission-control-intake-history';
+const INTAKE_DRAFT_KEY = 'mission-control-intake-live-draft';
 const INTAKE_HISTORY_TTL_MS = 60 * 60 * 1000;
 const INTAKE_HISTORY_LIMIT = 20;
 
@@ -87,6 +89,33 @@ function saveIntakeHistoryEntry(text: string): void {
   writeIntakeHistory([{ text: clean, savedAt: Date.now() }, ...current]);
 }
 
+function readIntakeDraft(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(INTAKE_DRAFT_KEY) || 'null') as IntakeHistoryEntry | null;
+    if (!parsed?.text?.trim()) return '';
+    if (parsed.savedAt < Date.now() - INTAKE_HISTORY_TTL_MS) return '';
+    return parsed.text;
+  } catch {
+    return '';
+  }
+}
+
+function writeIntakeDraft(text: string): void {
+  if (typeof window === 'undefined') return;
+  const clean = text.trim();
+  if (!clean) {
+    window.localStorage.removeItem(INTAKE_DRAFT_KEY);
+    return;
+  }
+  window.localStorage.setItem(INTAKE_DRAFT_KEY, JSON.stringify({ text, savedAt: Date.now() }));
+}
+
+function clearIntakeDraft(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(INTAKE_DRAFT_KEY);
+}
+
 export function CreateMissionItemButton({
   settings,
   todayISO,
@@ -104,7 +133,10 @@ export function CreateMissionItemButton({
   const [errorMessage, setErrorMessage] = useState('');
 
   // ─── Form state ─────────────────────────────────────────────────────────────
-  const [taskDraft, setTaskDraft] = useState<TaskDraftState>(() => createEmptyTaskDraft(settings, todayISO));
+  const [taskDraft, setTaskDraft] = useState<TaskDraftState>(() => ({
+    ...createEmptyTaskDraft(settings, todayISO),
+    rawIntake: readIntakeDraft(),
+  }));
   const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraftState>(() => createEmptyScheduleDraft(settings, todayISO));
   const [reviewRows, setReviewRows] = useState<ParsedReviewRow[]>([]);
   const [duplicateCandidate, setDuplicateCandidate] = useState<DuplicateCandidate | null>(null);
@@ -141,6 +173,29 @@ export function CreateMissionItemButton({
     setErrorMessage('');
     setDuplicateCandidate(null);
     setIntakeHistoryIndex(-1);
+    if (panel === 'task') {
+      setTaskDraft((current) => {
+        if (current.rawIntake.trim() || current.title.trim()) return current;
+        const restored = readIntakeDraft();
+        return restored ? { ...createEmptyTaskDraft(settings, todayISO), rawIntake: restored } : current;
+      });
+    }
+  };
+
+  const hasTaskDraftContent = () =>
+    Boolean(
+      taskDraft.rawIntake.trim() ||
+      taskDraft.title.trim() ||
+      taskDraft.whyNow.trim() ||
+      taskDraft.notes.trim() ||
+      taskDraft.aiConversationUrl.trim() ||
+      taskDraft.subtasks.some((subtask) => subtask.trim()),
+    );
+
+  const resetTaskDraft = () => {
+    setTaskDraft(createEmptyTaskDraft(settings, todayISO));
+    clearIntakeDraft();
+    setIntakeHistoryIndex(-1);
   };
 
   const closePanel = () => {
@@ -151,7 +206,17 @@ export function CreateMissionItemButton({
     setErrorMessage('');
     setDuplicateCandidate(null);
     setReviewRows([]);
+    clearIntakeDraft();
     setIntakeHistoryIndex(-1);
+  };
+
+  const requestClosePanel = () => {
+    if (activePanel === 'task' && hasTaskDraftContent()) {
+      setStatusMessage('יש טיוטה פתוחה. כדי לסגור בלי לשמור לחץ ביטול, או נקה את הטופס.');
+      setErrorMessage('');
+      return;
+    }
+    closePanel();
   };
 
   // ─── Task draft handlers ─────────────────────────────────────────────────────
@@ -204,6 +269,7 @@ export function CreateMissionItemButton({
 
   const updateRawIntake = (value: string) => {
     updateTaskDraft('rawIntake', value);
+    writeIntakeDraft(value);
     setIntakeHistoryIndex(-1);
   };
 
@@ -217,6 +283,7 @@ export function CreateMissionItemButton({
     if (!entry) return;
     setIntakeHistoryIndex(nextIndex);
     setTaskDraft((current) => ({ ...current, rawIntake: entry.text }));
+    writeIntakeDraft(entry.text);
     setStatusMessage(`שחזרתי טיוטה מלפני עד שעה (${nextIndex + 1}/${history.length}).`);
     setErrorMessage('');
   };
@@ -224,6 +291,18 @@ export function CreateMissionItemButton({
   const addSubtaskRow = () => updateTaskDraft('subtasks', [...taskDraft.subtasks, '']);
 
   const updateSubtaskRow = (index: number, value: string) => {
+    if (/\r?\n/.test(value)) {
+      const rows = value
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (rows.length > 1) {
+        const next = [...taskDraft.subtasks];
+        next.splice(index, 1, ...rows);
+        updateTaskDraft('subtasks', next);
+        return;
+      }
+    }
     updateTaskDraft('subtasks', taskDraft.subtasks.map((s, i) => (i === index ? value : s)));
   };
 
@@ -232,7 +311,7 @@ export function CreateMissionItemButton({
     updateTaskDraft('subtasks', next.length > 0 ? next : ['']);
   };
 
-  const handleSubtaskKeyDown = (event: KeyboardEvent<HTMLInputElement>, index: number) => {
+  const handleSubtaskKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>, index: number) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     if (event.ctrlKey || event.metaKey) { void saveTask({ keepOpen: false }); return; }
@@ -287,10 +366,17 @@ export function CreateMissionItemButton({
 
       for (let i = startIndex; i < event.results.length; i += 1) {
         const result = event.results[i];
-        const transcript = result[0]?.transcript?.trim() ?? '';
+        const transcript = normalizeSpokenText(result[0]?.transcript?.trim() ?? '');
         if (!transcript) continue;
         if (result.isFinal) {
-          nextFinalSegments[i] = transcript;
+          const existing = nextFinalSegments[i];
+          const existingComparable = existing ? normalizeComparableText(existing) : '';
+          const transcriptComparable = normalizeComparableText(transcript);
+          if (!existingComparable || transcriptComparable.includes(existingComparable)) {
+            nextFinalSegments[i] = transcript;
+          } else if (!existingComparable.includes(transcriptComparable)) {
+            nextFinalSegments.push(transcript);
+          }
         } else {
           interimSegments.push(transcript);
         }
@@ -298,7 +384,7 @@ export function CreateMissionItemButton({
 
       const compactSegments = (segments: string[]) =>
         segments
-          .map((segment) => segment.trim())
+          .map((segment) => normalizeSpokenText(segment).trim())
           .filter(Boolean)
           .reduce<string[]>((acc, segment) => {
             const comparable = normalizeComparableText(segment);
@@ -311,8 +397,8 @@ export function CreateMissionItemButton({
             return [...acc, segment];
           }, []);
 
-      speechFinalSegmentsRef.current = nextFinalSegments;
       const finalSegments = compactSegments(nextFinalSegments);
+      speechFinalSegmentsRef.current = finalSegments;
       speechFinalTextRef.current = finalSegments.join(' ');
       const spokenText = compactSegments([...finalSegments, ...interimSegments]).join(' ');
       const nextText = mergeSpeechIntoDraft(speechBaseTextRef.current, spokenText);
@@ -477,6 +563,7 @@ export function CreateMissionItemButton({
   };
 
   const finishAfterCreate = ({ keepOpen, message }: { keepOpen: boolean; message: string }) => {
+    clearIntakeDraft();
     if (keepOpen) {
       setTaskDraft((cur) => createContinuationTaskDraft(cur));
       setStatusMessage(message);
@@ -790,7 +877,7 @@ export function CreateMissionItemButton({
               </div>
               <button
                 type="button"
-                onClick={closePanel}
+                onClick={requestClosePanel}
                 className="grid h-9 w-9 place-items-center rounded-2xl bg-white/20 text-lg font-black text-white hover:bg-white/30 transition"
                 aria-label="סגור"
               >
@@ -937,7 +1024,7 @@ export function CreateMissionItemButton({
                   <button
                     type="button"
                     className="rounded-2xl px-3 py-2.5 text-xs font-bold text-slate-400 hover:text-slate-600 transition"
-                    onClick={() => setTaskDraft(createEmptyTaskDraft(settings, todayISO))}
+                    onClick={resetTaskDraft}
                     title="נקה טופס"
                   >
                     נקה

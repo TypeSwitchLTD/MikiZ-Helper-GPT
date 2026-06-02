@@ -595,7 +595,7 @@ function collapseRepeatedSpeechChunks(input: string): string {
     .split('\n')
     .map((line) => {
       const words = line.trim().split(/\s+/).filter(Boolean);
-      if (words.length < 3) return line.trim();
+      if (words.length < 2) return line.trim();
 
       const output: string[] = [];
       let index = 0;
@@ -623,11 +623,7 @@ function collapseRepeatedSpeechChunks(input: string): string {
           continue;
         }
 
-        if (
-          index + 2 < words.length &&
-          words[index] === words[index + 1] &&
-          words[index] === words[index + 2]
-        ) {
+        if (index + 1 < words.length && words[index] === words[index + 1]) {
           output.push(words[index]);
           const repeated = words[index];
           while (words[index] === repeated) index += 1;
@@ -645,6 +641,24 @@ function collapseRepeatedSpeechChunks(input: string): string {
 
 function normalizeSpokenTextWithCommands(input: string): string {
   const replacements: Array<[RegExp, string]> = [
+    [/רד שורה|תרד שורה|שורה חדשה|ירידת שורה/g, '\n'],
+    [/פסקה חדשה/g, '\n\n'],
+    [/סעיף חדש|סעיף הבא|מקף חדש/g, '\n- '],
+    [/נקודתיים|נקודותיים/g, ':'],
+    [/נקודה/g, '.'],
+    [/פסיק/g, ','],
+    [/סימן שאלה/g, '?'],
+    [/סימן קריאה/g, '!'],
+    [/(^|[\s\n])(אחד|מספר אחד)(?=[\s\n]|$)/g, '$1\n1. '],
+    [/(^|[\s\n])(שתיים|שניים|מספר שתיים|מספר שניים)(?=[\s\n]|$)/g, '$1\n2. '],
+    [/(^|[\s\n])(שלוש|מספר שלוש)(?=[\s\n]|$)/g, '$1\n3. '],
+    [/(^|[\s\n])(ארבע|מספר ארבע)(?=[\s\n]|$)/g, '$1\n4. '],
+    [/(^|[\s\n])(חמש|מספר חמש)(?=[\s\n]|$)/g, '$1\n5. '],
+    [/(^|[\s\n])(שש|מספר שש)(?=[\s\n]|$)/g, '$1\n6. '],
+    [/(^|[\s\n])(שבע|מספר שבע)(?=[\s\n]|$)/g, '$1\n7. '],
+    [/(^|[\s\n])(שמונה|מספר שמונה)(?=[\s\n]|$)/g, '$1\n8. '],
+    [/(^|[\s\n])(תשע|מספר תשע)(?=[\s\n]|$)/g, '$1\n9. '],
+    [/(^|[\s\n])(עשר|מספר עשר)(?=[\s\n]|$)/g, '$1\n10. '],
     [/\b(line break|go down a line|new line)\b/gi, '\n'],
     [/\bnew paragraph\b/gi, '\n\n'],
     [/\b(next item|new item)\b/gi, '\n- '],

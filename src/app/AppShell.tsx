@@ -13,6 +13,7 @@ import { PersonalTab } from "../features/personal/PersonalTab";
 import { MorningBriefingModal } from "../features/morning/MorningBriefingModal";
 import { CommandCenterModal } from "../features/morning/CommandCenterModal";
 import { ReadyCheckModal } from "../features/morning/ReadyCheckModal";
+import { FocusTab } from "../features/focus/FocusTab";
 import { FocusTimerModal } from "../features/focus/FocusTimerModal";
 import { useMorningBriefing } from "../features/morning/useMorningBriefing";
 import { getTaskProgress } from "../domain/tasks/taskProgress";
@@ -24,7 +25,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.10";
+const APP_VERSION = "0.8.14";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -275,6 +276,14 @@ function NavIcon({ tabId, className }: { tabId: string; className?: string }) {
           <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+        </svg>
+      );
+    case "focus":
+      return (
+        <svg {...SVG_BASE} className={cls}>
+          <circle cx="12" cy="12" r="8" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
         </svg>
       );
     case "workouts":
@@ -665,6 +674,12 @@ export function AppShell() {
 
   const focusTimerLabel = `${Math.floor(focusSeconds / 60).toString().padStart(2, "0")}:${(focusSeconds % 60).toString().padStart(2, "0")}`;
 
+  const startFocusTimer = useCallback(() => {
+    if ("Notification" in window && Notification.permission === "default")
+      void Notification.requestPermission();
+    setFocusRunning(true);
+  }, []);
+
   // ─── Derived counts ───────────────────────────────────────────────────────────
   const pendingReminders = useMemo(
     () =>
@@ -771,6 +786,7 @@ export function AppShell() {
       reports: data.reports,
       logs: data.logs,
       reminders: data.reminders,
+      focusItems: data.focusItems,
       settings: data.settings,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -901,6 +917,7 @@ export function AppShell() {
     focusedTaskId,
     onChangeSubtaskStatus: data.changeSubtaskStatus,
     onMoveToTomorrow: data.moveTaskTomorrow,
+    onMoveToBacklogGroup: data.moveTaskBacklogGroup,
     onChangeTaskDate: data.changeTaskDate,
     onCancelTask: data.cancelExistingTask,
     onUpdateTaskText: data.updateExistingTaskText,
@@ -909,6 +926,8 @@ export function AppShell() {
     onAddSubtaskToTask: data.addSubtaskToExistingTask,
     onReorderTaskFocus: data.reorderTaskFocus,
     onAddReminder: data.addReminder,
+    onAddTaskToFocus: data.addTaskToFocusDeck,
+    onAddSubtaskToFocus: data.addSubtaskToFocusDeck,
   };
 
   const renderActiveTab = () => {
@@ -925,6 +944,30 @@ export function AppShell() {
             onToggleQuietMode={() => setGlobalQuietMode((c) => !c)}
             onOpenFocusTimer={() => setFocusTimerOpen(true)}
             {...commonTaskActions}
+          />
+        );
+      case "focus":
+        return (
+          <FocusTab
+            focusItems={data.focusItems}
+            tasks={data.tasks}
+            subtasks={data.subtasks}
+            focusSeconds={focusSeconds}
+            focusRunning={focusRunning}
+            isSaving={data.isSaving}
+            onStartTimer={startFocusTimer}
+            onStopTimer={() => setFocusRunning(false)}
+            onResetTimer={() => { setFocusRunning(false); setFocusSeconds(20 * 60); }}
+            onSetTimerMinutes={(minutes) => { setFocusRunning(false); setFocusSeconds(minutes * 60); }}
+            onOpenTimer={() => setFocusTimerOpen(true)}
+            onCompleteFocusItem={data.completeFocusDeckItem}
+            onRemoveFocusItem={data.removeFocusDeckItem}
+            onClearFocus={data.clearFocusDeck}
+            onJumpToTask={(taskId) => {
+              setActiveTab("tasks");
+              setFocusedTaskId(taskId);
+              setSearchQuery("");
+            }}
           />
         );
       case "social":
@@ -1559,7 +1602,7 @@ export function AppShell() {
                 {/* Quick actions */}
                 <div className="mb-2 grid grid-cols-3 gap-2">
                   <button type="button" onClick={() => { setReadyCheckOpen(true); setMobilePanelOpen(false); }} className="rounded-2xl bg-white/80 px-3 py-3 text-center text-xs font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-sky-50">☀ בוקר?</button>
-                  <button type="button" onClick={() => { setFocusTimerOpen(true); setMobilePanelOpen(false); }} className="rounded-2xl bg-white/80 px-3 py-3 text-center text-xs font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-orange-50">⏱ פוקוס</button>
+                  <button type="button" onClick={() => { setActiveTab("focus"); setMobilePanelOpen(false); }} className="rounded-2xl bg-white/80 px-3 py-3 text-center text-xs font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-orange-50">⏱ פוקוס</button>
                   <button type="button" onClick={() => { setActiveTab("settings"); setMobilePanelOpen(false); }} className="rounded-2xl bg-white/80 px-3 py-3 text-center text-xs font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100">⚙ הגדרות</button>
                 </div>
 
@@ -1842,11 +1885,7 @@ export function AppShell() {
         <FocusTimerModal
           focusSeconds={focusSeconds}
           focusRunning={focusRunning}
-          onStart={() => {
-            if ("Notification" in window && Notification.permission === "default")
-              void Notification.requestPermission();
-            setFocusRunning(true);
-          }}
+          onStart={startFocusTimer}
           onStop={() => setFocusRunning(false)}
           onReset={() => { setFocusRunning(false); setFocusSeconds(20 * 60); }}
           onSetMinutes={(minutes) => { setFocusRunning(false); setFocusSeconds(minutes * 60); }}

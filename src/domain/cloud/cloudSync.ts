@@ -1,4 +1,5 @@
 import type { DailyPlan } from '../dailyPlans/dailyPlanTypes';
+import type { FocusItem } from '../focus/focusTypes';
 import type { LogEvent } from '../logs/logTypes';
 import type { RecurringTaskDefinition } from '../recurring/recurringTypes';
 import type { DailyReport } from '../reports/reportTypes';
@@ -17,6 +18,7 @@ export interface CloudSyncPayload {
   reports: DailyReport[];
   logs: LogEvent[];
   reminders: Reminder[];
+  focusItems?: FocusItem[];
   settings: AppSettings;
 }
 

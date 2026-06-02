@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Reminder } from "../../domain/reminders/reminderTypes";
 import type { AppSettings } from "../../domain/settings/settingsTypes";
 import type {
+  BacklogGroup,
   Subtask,
   SubtaskStatus,
   Task,
@@ -28,6 +29,7 @@ interface ReadOnlyTaskCardProps {
     status: SubtaskStatus,
   ) => Promise<void> | void;
   onMoveToTomorrow?: (task: Task) => Promise<void> | void;
+  onMoveToBacklogGroup?: (task: Task, backlogGroup: BacklogGroup) => Promise<void> | void;
   onChangeTaskDate?: (task: Task, targetDate: string) => Promise<void> | void;
   onCancelTask?: (taskId: string) => Promise<void> | void;
   onUpdateTaskText?: (
@@ -69,6 +71,8 @@ interface ReadOnlyTaskCardProps {
   }) => Promise<void> | void;
   isFocused?: boolean;
   onOpenFocusTimer?: () => void;
+  onAddTaskToFocus?: (taskId: string) => Promise<void> | void;
+  onAddSubtaskToFocus?: (taskId: string, subtaskId: string) => Promise<void> | void;
   isBacklogPreview?: boolean;
 }
 
@@ -84,7 +88,7 @@ function getStatusBadgeClass(
   progress: ReturnType<typeof getTaskProgress>,
 ): string {
   if (progress.status === "done")
-    return "bg-emerald-50 text-emerald-700 ring-emerald-100";
+    return "bg-rose-50 text-rose-700 ring-rose-100";
   if (progress.status === "cancelled")
     return "bg-rose-50 text-rose-700 ring-rose-100";
   if (progress.status === "moved")
@@ -240,6 +244,7 @@ export function ReadOnlyTaskCard({
   settings,
   onChangeSubtaskStatus,
   onMoveToTomorrow,
+  onMoveToBacklogGroup,
   onChangeTaskDate,
   onCancelTask,
   onUpdateTaskText,
@@ -251,6 +256,8 @@ export function ReadOnlyTaskCard({
   onAddReminder,
   isFocused = false,
   onOpenFocusTimer,
+  onAddTaskToFocus,
+  onAddSubtaskToFocus,
   isBacklogPreview = false,
 }: ReadOnlyTaskCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -323,7 +330,8 @@ export function ReadOnlyTaskCard({
     onUpdateTaskText ||
     onUpdateTaskDetails ||
     onAddSubtaskToTask ||
-    onAddReminder,
+    onAddReminder ||
+    onAddTaskToFocus,
   );
 
   useEffect(() => {
@@ -534,6 +542,18 @@ export function ReadOnlyTaskCard({
     await onMoveToTomorrow(task);
   };
 
+  const handleMoveToday = async () => {
+    if (!onChangeTaskDate) return;
+    setActionError("");
+    await onChangeTaskDate(task, getLocalISODate());
+  };
+
+  const handleMoveBacklogGroup = async (backlogGroup: BacklogGroup) => {
+    if (!onMoveToBacklogGroup) return;
+    setActionError("");
+    await onMoveToBacklogGroup(task, backlogGroup);
+  };
+
   const handleChangeDate = async () => {
     if (!onChangeTaskDate) return;
     if (!targetDate) {
@@ -557,8 +577,8 @@ export function ReadOnlyTaskCard({
       className={`rounded-2xl border p-3 shadow-sm transition hover:shadow-soft sm:p-4 ${
         isFocused
           ? "border-cyan-300 bg-cyan-50/60 ring-4 ring-cyan-100"
-          : isMutedDone
-            ? "border-emerald-100 bg-emerald-50/60 opacity-80"
+          : isDone
+            ? `${isMutedDone ? "opacity-85" : ""} border-rose-100 bg-rose-50/60`
             : isBacklogPreview
               ? "border-amber-200 bg-amber-50 hover:border-amber-300"
               : "border-slate-200 bg-white hover:border-sky-200"
@@ -606,7 +626,7 @@ export function ReadOnlyTaskCard({
                 {isExpanded ? "▾" : "▸"}
               </span>
               <h3
-                className={`mobile-clamp-2 min-w-0 text-base font-black leading-tight sm:truncate sm:text-lg ${isMutedDone ? "text-slate-500 line-through" : "text-slate-950"}`}
+                className={`mobile-clamp-2 min-w-0 text-base font-black leading-tight sm:truncate sm:text-lg ${isDone ? "text-rose-950/70 line-through decoration-rose-400 decoration-2" : "text-slate-950"}`}
               >
                 {task.title}
               </h3>
@@ -881,6 +901,16 @@ export function ReadOnlyTaskCard({
                           תזכורת
                         </button>
                       ) : null}
+                      {onAddSubtaskToFocus ? (
+                        <button
+                          type="button"
+                          className="rounded-2xl bg-cyan-50 px-3 py-1.5 text-xs font-black text-cyan-800 ring-1 ring-cyan-100 transition hover:bg-cyan-100 disabled:opacity-40"
+                          disabled={isSaving}
+                          onClick={() => void onAddSubtaskToFocus(task.id, subtask.id)}
+                        >
+                          + פוקוס
+                        </button>
+                      ) : null}
                       <label className="flex items-center gap-2 whitespace-nowrap text-xs font-bold text-slate-700">
                         <span>סיום</span>
                         <input
@@ -963,6 +993,14 @@ export function ReadOnlyTaskCard({
                 <button
                   type="button"
                   className="rounded-2xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800 ring-1 ring-cyan-100 hover:bg-cyan-100 transition disabled:opacity-40"
+                  disabled={isSaving || !onAddTaskToFocus}
+                  onClick={() => void onAddTaskToFocus?.(task.id)}
+                >
+                  + פוקוס
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800 ring-1 ring-cyan-100 hover:bg-cyan-100 transition disabled:opacity-40"
                   disabled={!taskAiUrl}
                   onClick={() => openAiConversation(taskAiUrl)}
                 >
@@ -975,6 +1013,30 @@ export function ReadOnlyTaskCard({
                   onClick={() => void handleMoveTomorrow()}
                 >
                   ← מחר
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-800 ring-1 ring-sky-100 hover:bg-sky-100 transition disabled:opacity-40"
+                  disabled={isSaving || !onChangeTaskDate || task.bucket === "today"}
+                  onClick={() => void handleMoveToday()}
+                >
+                  היום
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-800 ring-1 ring-blue-100 hover:bg-blue-100 transition disabled:opacity-40"
+                  disabled={isSaving || !onMoveToBacklogGroup}
+                  onClick={() => void handleMoveBacklogGroup("this_week")}
+                >
+                  השבוע
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-100 hover:bg-amber-100 transition disabled:opacity-40"
+                  disabled={isSaving || !onMoveToBacklogGroup}
+                  onClick={() => void handleMoveBacklogGroup("waiting")}
+                >
+                  ממתין
                 </button>
                 {cancelConfirm ? (
                   <div className="flex items-center gap-1.5 rounded-2xl bg-rose-50 px-3 py-2 ring-1 ring-rose-200">
@@ -1324,6 +1386,27 @@ export function ReadOnlyTaskCard({
                     onChange={(e) => setReminderTime(e.target.value)}
                   />
                 </label>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: "בוקר", value: "09:00" },
+                  { label: "צהריים", value: "13:00" },
+                  { label: "ערב", value: "18:00" },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`rounded-2xl px-3 py-1.5 text-xs font-black ring-1 ${
+                      reminderTime === option.value
+                        ? "bg-slate-950 text-white ring-slate-950"
+                        : "bg-white text-slate-700 ring-slate-200"
+                    }`}
+                    onClick={() => setReminderTime(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
 
               <div className="flex gap-2">

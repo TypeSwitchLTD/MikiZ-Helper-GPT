@@ -1,4 +1,4 @@
-export type AppTabId = "tasks" | "social" | "workouts" | "personal" | "reminders" | "settings";
+export type AppTabId = "tasks" | "focus" | "social" | "workouts" | "personal" | "reminders" | "settings";
 
 export interface AppTab {
   id: AppTabId;
@@ -12,6 +12,11 @@ export const appTabs: AppTab[] = [
     id: "tasks",
     label: "משימות",
     description: "כל מה שרלוונטי, היום, קלילים, באקלוג וחוזרות במקום אחד",
+  },
+  {
+    id: "focus",
+    label: "פוקוס",
+    description: "עד 6 משימות נבחרות לעבודה נקייה עם טיימר.",
   },
   {
     id: "social",

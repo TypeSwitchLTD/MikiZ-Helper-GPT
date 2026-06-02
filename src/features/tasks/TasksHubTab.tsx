@@ -4,11 +4,15 @@ import { ReadOnlyTaskCard } from "../../components/task/ReadOnlyTaskCard";
 import type { Reminder } from "../../domain/reminders/reminderTypes";
 import type { AppSettings } from "../../domain/settings/settingsTypes";
 import { getTaskProgress } from "../../domain/tasks/taskProgress";
-import type { Subtask, Task } from "../../domain/tasks/taskTypes";
+import type { BacklogGroup, Subtask, Task } from "../../domain/tasks/taskTypes";
 
 type TaskFilterId =
   | "relevant"
   | "today"
+  | "tomorrow"
+  | "this_week"
+  | "waiting"
+  | "later"
   | "quick"
   | "backlog"
   | "recurring"
@@ -28,6 +32,7 @@ interface TasksHubTabProps {
     status: Subtask["status"],
   ) => Promise<void> | void;
   onMoveToTomorrow: (task: Task) => Promise<void> | void;
+  onMoveToBacklogGroup?: (task: Task, backlogGroup: BacklogGroup) => Promise<void> | void;
   onChangeTaskDate: (task: Task, targetDate: string) => Promise<void> | void;
   onCancelTask: (taskId: string) => Promise<void> | void;
   onUpdateTaskText: (
@@ -69,6 +74,8 @@ interface TasksHubTabProps {
   quietMode?: boolean;
   onToggleQuietMode?: () => void;
   onOpenFocusTimer?: () => void;
+  onAddTaskToFocus?: (taskId: string) => Promise<void> | void;
+  onAddSubtaskToFocus?: (taskId: string, subtaskId: string) => Promise<void> | void;
 }
 
 
@@ -115,11 +122,19 @@ const TASK_GROUP_META: Record<string, { label: string; dotColor: string; headerC
   backlog:     { label: 'בקלוג',  dotColor: 'bg-slate-400',   headerColor: 'text-slate-600',   borderColor: 'border-slate-200' },
 };
 
+const BACKLOG_GROUP_META: Record<string, { label: string; dotColor: string; headerColor: string; borderColor: string }> = {
+  tomorrow:  { label: 'מחר',   dotColor: 'bg-cyan-400',  headerColor: 'text-cyan-700',  borderColor: 'border-cyan-200' },
+  this_week: { label: 'השבוע', dotColor: 'bg-blue-400',  headerColor: 'text-blue-700',  borderColor: 'border-blue-200' },
+  waiting:   { label: 'ממתין', dotColor: 'bg-amber-400', headerColor: 'text-amber-700', borderColor: 'border-amber-200' },
+  later:     { label: 'בהמשך', dotColor: 'bg-slate-400', headerColor: 'text-slate-600', borderColor: 'border-slate-200' },
+};
+
 function getTaskGroup(task: Task, subtasks: Subtask[], todayISO: string): string {
   if (task.bucket === 'today' || task.date === todayISO) return 'today';
   const progress = getTaskProgress(task, subtasks);
   if (progress.startedCount > 0 || progress.status === 'in_progress') return 'in_progress';
   if (task.isQuickWin) return 'quick';
+  if (task.bucket === 'backlog' && task.backlogGroup) return task.backlogGroup;
   return 'backlog';
 }
 
@@ -129,12 +144,12 @@ function groupTasks(
   todayISO: string,
   order: string[],
 ): Array<{ groupId: string; tasks: Task[] }> {
-  const grouped: Record<string, Task[]> = { today: [], in_progress: [], quick: [], backlog: [] };
+  const grouped: Record<string, Task[]> = { today: [], in_progress: [], quick: [], tomorrow: [], this_week: [], waiting: [], later: [], backlog: [] };
   tasks.forEach((task) => {
     const g = getTaskGroup(task, subtasks, todayISO);
     grouped[g].push(task);
   });
-  return order
+  return Array.from(new Set([...order, 'tomorrow', 'this_week', 'waiting', 'later', 'backlog']))
     .map((id) => ({ groupId: id, tasks: grouped[id] ?? [] }))
     .filter((g) => g.tasks.length > 0);
 }
@@ -184,6 +199,7 @@ function getRelevantTasks(
       const progress = getTaskProgress(task, subtasks);
       return (
         progress.status !== "cancelled" &&
+        progress.status !== "done" &&
         task.statusOverride !== "cancelled"
       );
     })
@@ -206,6 +222,19 @@ function filterTasks(
           (task) =>
             task.bucket === "today" &&
             task.date === todayISO &&
+            getTaskProgress(task, subtasks).status !== "done" &&
+            task.statusOverride !== "cancelled",
+        )
+        .sort(compareFocus);
+    case "tomorrow":
+    case "this_week":
+    case "waiting":
+    case "later":
+      return tasks
+        .filter(
+          (task) =>
+            task.bucket === "backlog" &&
+            task.backlogGroup === filter &&
             getTaskProgress(task, subtasks).status !== "done" &&
             task.statusOverride !== "cancelled",
         )
@@ -272,6 +301,7 @@ export function TasksHubTab({
   focusedTaskId,
   onChangeSubtaskStatus,
   onMoveToTomorrow,
+  onMoveToBacklogGroup,
   onChangeTaskDate,
   onCancelTask,
   onUpdateTaskText,
@@ -283,6 +313,8 @@ export function TasksHubTab({
   quietMode: controlledQuietMode,
   onToggleQuietMode,
   onOpenFocusTimer,
+  onAddTaskToFocus,
+  onAddSubtaskToFocus,
 }: TasksHubTabProps) {
   const [activeFilters, setActiveFilters] = useState<TaskFilterId[]>([
     "relevant",
@@ -291,6 +323,10 @@ export function TasksHubTab({
   const counts = useMemo(() => {
     const relevant = getRelevantTasks(tasks, subtasks, reminders, todayISO);
     const today = filterTasks("today", tasks, subtasks, reminders, todayISO);
+    const tomorrow = filterTasks("tomorrow", tasks, subtasks, reminders, todayISO);
+    const thisWeek = filterTasks("this_week", tasks, subtasks, reminders, todayISO);
+    const waiting = filterTasks("waiting", tasks, subtasks, reminders, todayISO);
+    const later = filterTasks("later", tasks, subtasks, reminders, todayISO);
     const quick = filterTasks("quick", tasks, subtasks, reminders, todayISO);
     const backlog = filterTasks(
       "backlog",
@@ -317,6 +353,10 @@ export function TasksHubTab({
     return {
       relevant,
       today,
+      tomorrow,
+      thisWeek,
+      waiting,
+      later,
       quick,
       backlog,
       recurring,
@@ -357,6 +397,30 @@ export function TasksHubTab({
       tone: "bg-sky-50 text-sky-800 ring-sky-100",
     },
     {
+      id: "tomorrow",
+      label: `מחר (${counts.tomorrow.length})`,
+      meta: "מתוזמנות ליום הבא",
+      tone: "bg-cyan-50 text-cyan-800 ring-cyan-100",
+    },
+    {
+      id: "this_week",
+      label: `השבוע (${counts.thisWeek.length})`,
+      meta: "לא להיום, כן בקרוב",
+      tone: "bg-blue-50 text-blue-800 ring-blue-100",
+    },
+    {
+      id: "waiting",
+      label: `ממתין (${counts.waiting.length})`,
+      meta: "תקוע אצל מישהו",
+      tone: "bg-amber-50 text-amber-800 ring-amber-100",
+    },
+    {
+      id: "later",
+      label: `בהמשך (${counts.later.length})`,
+      meta: "לא דחוף",
+      tone: "bg-slate-50 text-slate-700 ring-slate-200",
+    },
+    {
       id: "quick",
       label: `קלילים (${counts.quick.length})`,
       meta: `${averageDuration(counts.quick)} דק׳ ממוצע`,
@@ -395,9 +459,6 @@ export function TasksHubTab({
   const recommendedTask = visibleTasks[0] ?? null;
   const nextTasks = visibleTasks.slice(1, 5);
   const recommendedProgress = recommendedTask ? getTaskProgress(recommendedTask, subtasks) : null;
-  const recommendedIsDone =
-    Boolean(recommendedProgress) &&
-    (recommendedProgress?.status === "done" || (recommendedProgress?.percent ?? 0) >= 100);
   const firstNextTask = nextTasks[0] ?? null;
 
   const toggleFilter = (filter: TaskFilterId) => {
@@ -456,7 +517,7 @@ export function TasksHubTab({
                 >
                   {quietMode ? "כבה מצב שקט" : "מצב שקט"}
                 </button>
-                {recommendedIsDone && firstNextTask ? (
+                {firstNextTask ? (
                   <button
                     type="button"
                     className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 ring-1 ring-emerald-100 sm:px-4 sm:text-sm"
@@ -613,7 +674,7 @@ export function TasksHubTab({
               todayISO,
               settings?.taskGroupOrder ?? ['today', 'in_progress', 'quick', 'backlog'],
             ).map(({ groupId, tasks: groupTasks_ }) => {
-              const meta = TASK_GROUP_META[groupId] ?? TASK_GROUP_META.backlog;
+              const meta = BACKLOG_GROUP_META[groupId] ?? TASK_GROUP_META[groupId] ?? TASK_GROUP_META.backlog;
               return (
                 <div key={groupId} className={`space-y-2 border-r-4 pr-2 sm:space-y-3 sm:pr-3 ${meta.borderColor}`}>
                   <div className="flex items-center gap-2">
@@ -646,6 +707,7 @@ export function TasksHubTab({
                           isSaving={isSaving}
                           onChangeSubtaskStatus={onChangeSubtaskStatus}
                           onMoveToTomorrow={onMoveToTomorrow}
+                          onMoveToBacklogGroup={onMoveToBacklogGroup}
                           onChangeTaskDate={onChangeTaskDate}
                           onCancelTask={onCancelTask}
                           onUpdateTaskText={onUpdateTaskText}
@@ -657,6 +719,8 @@ export function TasksHubTab({
                           onAddReminder={onAddReminder}
                           isFocused={focusedTaskId === task.id}
                           onOpenFocusTimer={onOpenFocusTimer}
+                          onAddTaskToFocus={onAddTaskToFocus}
+                          onAddSubtaskToFocus={onAddSubtaskToFocus}
                         />
                       </div>
                     );
@@ -690,6 +754,7 @@ export function TasksHubTab({
                   isSaving={isSaving}
                   onChangeSubtaskStatus={onChangeSubtaskStatus}
                   onMoveToTomorrow={onMoveToTomorrow}
+                  onMoveToBacklogGroup={onMoveToBacklogGroup}
                   onChangeTaskDate={onChangeTaskDate}
                   onCancelTask={onCancelTask}
                   onUpdateTaskText={onUpdateTaskText}
@@ -705,6 +770,8 @@ export function TasksHubTab({
                   onAddReminder={onAddReminder}
                   isFocused={focusedTaskId === task.id}
                   onOpenFocusTimer={onOpenFocusTimer}
+                  onAddTaskToFocus={onAddTaskToFocus}
+                  onAddSubtaskToFocus={onAddSubtaskToFocus}
                 />
               </div>
             ))}

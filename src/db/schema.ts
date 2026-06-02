@@ -1,4 +1,5 @@
 import type { DailyPlan } from '../domain/dailyPlans/dailyPlanTypes';
+import type { FocusItem } from '../domain/focus/focusTypes';
 import type { LogEvent } from '../domain/logs/logTypes';
 import type { RecurringTaskDefinition } from '../domain/recurring/recurringTypes';
 import type { DailyReport } from '../domain/reports/reportTypes';
@@ -7,8 +8,8 @@ import type { AppSettings } from '../domain/settings/settingsTypes';
 import type { Subtask, Task } from '../domain/tasks/taskTypes';
 
 export const DATABASE_NAME = 'mission-control-local';
-export const DATABASE_VERSION = 6;
-export const APP_VERSION = '0.8.8';
+export const DATABASE_VERSION = 7;
+export const APP_VERSION = '0.8.14';
 
 export interface BackupSnapshot {
   id: string;
@@ -23,6 +24,7 @@ export interface BackupSnapshot {
     reports: DailyReport[];
     logs: LogEvent[];
     reminders?: Reminder[];
+    focusItems?: FocusItem[];
     settings: AppSettings;
   };
 }

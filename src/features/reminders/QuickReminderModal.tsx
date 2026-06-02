@@ -274,6 +274,27 @@ export function QuickReminderModal({ todayISO, isSaving = false, onSave, onClose
                 </label>
               </div>
 
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'בוקר', value: '09:00' },
+                  { label: 'צהריים', value: '13:00' },
+                  { label: 'ערב', value: '18:00' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setTime(option.value)}
+                    className={`rounded-2xl px-3 py-1.5 text-xs font-black ring-1 ${
+                      time === option.value
+                        ? 'bg-slate-950 text-white ring-slate-950'
+                        : 'bg-white text-slate-700 ring-slate-200'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex gap-2">
                 <button type="button" onClick={() => setDate(todayISO)}
                   className={`rounded-2xl px-3 py-1.5 text-xs font-black ring-1 ${date === todayISO ? 'bg-slate-950 text-white ring-slate-950' : 'bg-white text-slate-700 ring-slate-200'}`}>

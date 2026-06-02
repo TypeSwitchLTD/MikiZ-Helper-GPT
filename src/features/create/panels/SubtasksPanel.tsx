@@ -8,7 +8,7 @@ interface SubtasksPanelProps {
   onAddRow: () => void;
   onUpdateRow: (index: number, value: string) => void;
   onRemoveRow: (index: number) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLInputElement>, index: number) => void;
+  onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>, index: number) => void;
   onToggleSchedule: (index: number) => void;
   onDateChange: (value: string) => void;
   onTimeLabelChange: (value: string) => void;
@@ -44,7 +44,8 @@ export function SubtasksPanel({
         {subtasks.map((subtask, index) => (
           <div key={index} className="rounded-3xl bg-white p-2 ring-1 ring-slate-100">
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
-              <input
+              <textarea
+                rows={1}
                 value={subtask}
                 onChange={(e) => onUpdateRow(index, e.target.value)}
                 onKeyDown={(e) => onKeyDown(e, index)}
