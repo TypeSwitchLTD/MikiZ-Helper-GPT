@@ -94,6 +94,46 @@ function resolveElevenLabsModelId(settings: AppSettings | null): string {
   return configuredModelId;
 }
 
+async function sha256Text(value: string): Promise<string> {
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+    return hash.toString(16);
+  }
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function buildAudioCachePayload(text: string, settings: AppSettings | null): string {
+  const voice = getVoice(settings);
+  return JSON.stringify({
+    text,
+    voiceId: voice?.elevenLabsVoiceId?.trim() ?? '',
+    modelId: resolveElevenLabsModelId(settings),
+    outputFormat: voice?.elevenLabsOutputFormat?.trim() || 'mp3_44100_128',
+    stability: voice?.stability ?? 0.45,
+    similarityBoost: voice?.similarityBoost ?? 0.82,
+    style: voice?.style ?? 0.2,
+    useSpeakerBoost: voice?.useSpeakerBoost ?? true,
+  });
+}
+
+async function getCachedAudioUrl(cacheKey: string): Promise<string | null> {
+  if (typeof caches === 'undefined') return null;
+  const cache = await caches.open('mission-control-elevenlabs-v1');
+  const cached = await cache.match(cacheKey);
+  if (!cached) return null;
+  const blob = await cached.blob();
+  return blob.size > 0 ? URL.createObjectURL(blob) : null;
+}
+
+async function putCachedAudio(cacheKey: string, blob: Blob): Promise<void> {
+  if (typeof caches === 'undefined' || blob.size === 0) return;
+  const cache = await caches.open('mission-control-elevenlabs-v1');
+  await cache.put(cacheKey, new Response(blob, { headers: { 'Content-Type': blob.type || 'audio/mpeg' } }));
+}
+
 export async function createElevenLabsAudioUrl(text: string, settings: AppSettings | null): Promise<ElevenLabsPlaybackResult> {
   const voice = getVoice(settings);
   const status = getElevenLabsConfigStatus(settings);
@@ -109,6 +149,12 @@ export async function createElevenLabsAudioUrl(text: string, settings: AppSettin
 
   if (!voiceId) return { ok: false, usedProxy: false, error: 'חסר Voice ID של ElevenLabs.' };
   if (!status.ok) return { ok: false, usedProxy: false, error: status.message };
+
+  const cacheKey = `/mission-control-elevenlabs-cache/${await sha256Text(buildAudioCachePayload(text, settings))}.mp3`;
+  const cachedAudioUrl = await getCachedAudioUrl(cacheKey).catch(() => null);
+  if (cachedAudioUrl) {
+    return { ok: true, usedProxy: true, requestUrl: cacheKey, audioUrl: cachedAudioUrl };
+  }
 
   const body = {
     text,
@@ -159,6 +205,7 @@ export async function createElevenLabsAudioUrl(text: string, settings: AppSettin
       return { ok: false, usedProxy: request.usedProxy, requestUrl: request.url, error: 'ElevenLabs החזיר קובץ אודיו ריק.' };
     }
 
+    await putCachedAudio(cacheKey, blob).catch(() => undefined);
     return { ok: true, usedProxy: request.usedProxy, requestUrl: request.url, audioUrl: URL.createObjectURL(blob) };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'שגיאה לא ידועה ביצירת קול ElevenLabs.';

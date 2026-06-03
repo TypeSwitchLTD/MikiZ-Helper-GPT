@@ -43,7 +43,7 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.14-focus-deck';
+const CLIENT_APP_VERSION = '0.8.17-linkified-text';
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 interface MissionControlData {

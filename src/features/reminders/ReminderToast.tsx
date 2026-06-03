@@ -1,5 +1,6 @@
 import type { Reminder } from '../../domain/reminders/reminderTypes';
 import type { Task } from '../../domain/tasks/taskTypes';
+import { LinkifiedText } from '../../components/ui/LinkifiedText';
 
 interface ReminderToastProps {
   dueReminders: Reminder[];
@@ -70,9 +71,13 @@ export function ReminderToast({
 
             {/* Body */}
             <div className="px-3 pb-2 pt-2 sm:px-4 sm:pt-3">
-              <p className="mobile-clamp-2 text-sm font-black leading-snug text-slate-950">{reminder.title}</p>
+              <p className="mobile-clamp-2 text-sm font-black leading-snug text-slate-950">
+                <LinkifiedText text={reminder.title} />
+              </p>
               {reminder.note ? (
-                <p className="mt-0.5 text-xs font-medium text-slate-600">{reminder.note}</p>
+                <p className="mt-0.5 text-xs font-medium text-slate-600">
+                  <LinkifiedText text={reminder.note} />
+                </p>
               ) : null}
 
               {/* Linked task */}

@@ -227,13 +227,15 @@ function getReminderDayPart(remindAt: string): string {
 function getTodayReminderLines(input: BuildMorningBriefingInput): string[] {
   return (input.reminders ?? [])
     .filter((reminder) => reminder.status === 'pending')
-    .filter((reminder) => reminder.remindAt.slice(0, 10) === input.todayISO)
+    .filter((reminder) => reminder.remindAt.slice(0, 10) <= input.todayISO)
     .sort((a, b) => a.remindAt.localeCompare(b.remindAt))
     .slice(0, 6)
     .map((reminder, index) => {
       const dayPart = getReminderDayPart(reminder.remindAt);
+      const reminderDate = reminder.remindAt.slice(0, 10);
+      const prefix = reminderDate < input.todayISO ? 'נגררת - ' : '';
       const note = reminder.note?.trim();
-      return `${index + 1}. ${dayPart ? `${dayPart} - ` : ''}${reminder.title.trim()}${note ? `: ${note}` : ''}.`;
+      return `${index + 1}. ${prefix}${dayPart ? `${dayPart} - ` : ''}${reminder.title.trim()}${note ? `: ${note}` : ''}.`;
     });
 }
 

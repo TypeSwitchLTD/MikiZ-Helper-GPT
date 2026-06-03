@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { LinkifiedText } from "../../components/ui/LinkifiedText";
 import type { FocusItem } from "../../domain/focus/focusTypes";
 import { MAX_FOCUS_ITEMS } from "../../domain/focus/focusMutations";
 import { getTaskProgress } from "../../domain/tasks/taskProgress";
@@ -160,6 +161,12 @@ export function FocusTab({
             const title = isSubtask ? subtask?.title ?? item.titleSnapshot : task?.title ?? item.titleSnapshot;
             const parentTitle = isSubtask ? task?.title ?? item.parentTitleSnapshot : null;
             const progress = task ? getTaskProgress(task, subtasks) : null;
+            const childSubtasks = !isSubtask && task
+              ? subtasks
+                  .filter((candidate) => candidate.taskId === task.id && !candidate.deletedAt && candidate.status !== "cancelled")
+                  .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+                  .slice(0, 6)
+              : [];
             return (
               <article
                 key={item.id}
@@ -174,7 +181,7 @@ export function FocusTab({
                       {isSubtask ? "תת־משימה" : getTaskLabel(task)}
                     </p>
                     <h3 className="mt-1 mobile-clamp-3 text-lg font-black leading-tight text-slate-950">
-                      {title}
+                      <LinkifiedText text={title} />
                     </h3>
                     {parentTitle ? (
                       <p className="mt-2 truncate text-xs font-bold text-slate-500">{parentTitle}</p>
@@ -194,6 +201,19 @@ export function FocusTab({
                         style={{ width: `${Math.max(0, Math.min(100, progress.percent))}%` }}
                       />
                     </div>
+                  </div>
+                ) : null}
+
+                {childSubtasks.length > 0 ? (
+                  <div className="mt-4 space-y-1.5 rounded-2xl bg-slate-50 p-2.5 ring-1 ring-slate-100">
+                    {childSubtasks.map((child) => (
+                      <div key={child.id} className="flex items-start gap-2 text-right text-xs font-bold text-slate-700">
+                        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${child.status === "done" ? "bg-emerald-400" : child.status === "started" ? "bg-cyan-400" : "bg-slate-300"}`} />
+                        <span className={child.status === "done" ? "line-through decoration-rose-400 text-slate-400" : ""}>
+                          {child.title}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
 

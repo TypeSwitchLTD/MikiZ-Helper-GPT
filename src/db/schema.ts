@@ -9,7 +9,7 @@ import type { Subtask, Task } from '../domain/tasks/taskTypes';
 
 export const DATABASE_NAME = 'mission-control-local';
 export const DATABASE_VERSION = 7;
-export const APP_VERSION = '0.8.14';
+export const APP_VERSION = '0.8.17';
 
 export interface BackupSnapshot {
   id: string;

@@ -9,6 +9,7 @@ interface MorningBriefingModalProps
     | 'isMorningLoading'
     | 'isGeneratingVoice'
     | 'isSpeaking'
+    | 'isVoicePaused'
     | 'voiceError'
     | 'morningPublishStatus'
     | 'voiceStatus'
@@ -17,6 +18,8 @@ interface MorningBriefingModalProps
     | 'setSelectedVoiceName'
     | 'speakMorningBriefing'
     | 'stopMorningBriefing'
+    | 'pauseMorningBriefing'
+    | 'resumeMorningBriefing'
     | 'downloadMorningBriefing'
     | 'publishMorningBriefingForAndroid'
   > {
@@ -29,6 +32,7 @@ export function MorningBriefingModal({
   isMorningLoading,
   isGeneratingVoice,
   isSpeaking,
+  isVoicePaused,
   voiceError,
   morningPublishStatus,
   voiceStatus,
@@ -37,6 +41,8 @@ export function MorningBriefingModal({
   setSelectedVoiceName,
   speakMorningBriefing,
   stopMorningBriefing,
+  pauseMorningBriefing,
+  resumeMorningBriefing,
   downloadMorningBriefing,
   publishMorningBriefingForAndroid,
   onClose,
@@ -96,6 +102,16 @@ export function MorningBriefingModal({
             >
               {isGeneratingVoice ? 'מייצר קול...' : isSpeaking ? '■ עצור' : '▶ הקריא'}
             </button>
+            {isSpeaking ? (
+              <button
+                type="button"
+                className="rounded-2xl bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 ring-1 ring-amber-100 disabled:opacity-50"
+                disabled={isGeneratingVoice}
+                onClick={isVoicePaused ? resumeMorningBriefing : pauseMorningBriefing}
+              >
+                {isVoicePaused ? '▶ המשך' : '⏸ פאוזה'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="rounded-2xl bg-rose-50 px-4 py-2 text-sm font-black text-rose-700 ring-1 ring-rose-100"

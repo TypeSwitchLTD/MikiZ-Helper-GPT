@@ -62,6 +62,7 @@ export interface UseMorningBriefingReturn {
   availableVoices: SpeechSynthesisVoice[];
   isGeneratingVoice: boolean;
   isSpeaking: boolean;
+  isVoicePaused: boolean;
   voiceError: string;
   morningPublishStatus: string;
   setMorningPublishStatus: (v: string) => void;
@@ -75,6 +76,8 @@ export interface UseMorningBriefingReturn {
   // actions
   speakMorningBriefing: () => Promise<void>;
   stopMorningBriefing: () => void;
+  pauseMorningBriefing: () => void;
+  resumeMorningBriefing: () => void;
   openMorningBriefing: () => Promise<void>;
   playText: (text: string) => Promise<void>;
   downloadMorningBriefing: () => void;
@@ -104,6 +107,7 @@ export function useMorningBriefing({
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isVoicePaused, setIsVoicePaused] = useState(false);
   const [voiceError, setVoiceError] = useState('');
   const [morningPublishStatus, setMorningPublishStatus] = useState('');
   const [selectedVoiceName, setSelectedVoiceName] = useState(() => {
@@ -155,13 +159,13 @@ export function useMorningBriefing({
     setMorningPlayProgress((current) => (current > 0 ? current : 8));
     const id = window.setInterval(() => {
       setMorningPlayProgress((current) => {
-        if (isSpeaking) return 100;
+        if (isSpeaking) return isVoicePaused ? current : 100;
         if (current >= 92) return current;
         return Math.min(92, current + 7);
       });
     }, 240);
     return () => window.clearInterval(id);
-  }, [isMorningLoading, isGeneratingVoice, isSpeaking]);
+  }, [isMorningLoading, isGeneratingVoice, isSpeaking, isVoicePaused]);
 
   // ── Stop on unmount ───────────────────────────────────────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -248,7 +252,39 @@ export function useMorningBriefing({
     }
     setIsGeneratingVoice(false);
     setIsSpeaking(false);
+    setIsVoicePaused(false);
   }
+
+  const pauseMorningBriefing = useCallback(() => {
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+      setIsVoicePaused(true);
+      setIsSpeaking(true);
+      return;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
+      window.speechSynthesis.pause();
+      setIsVoicePaused(true);
+      setIsSpeaking(true);
+    }
+  }, []);
+
+  const resumeMorningBriefing = useCallback(() => {
+    if (audioRef.current && audioRef.current.paused) {
+      void audioRef.current.play().then(() => {
+        setIsVoicePaused(false);
+        setIsSpeaking(true);
+      }).catch((error) => {
+        setVoiceError(error instanceof Error ? error.message : 'הדפדפן חסם את המשך ההשמעה. לחץ שוב על המשך.');
+      });
+      return;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+      setIsVoicePaused(false);
+      setIsSpeaking(true);
+    }
+  }, []);
 
   const speakText = useCallback(
     (text: string, runId: number) => {
@@ -258,11 +294,13 @@ export function useMorningBriefing({
       const chunks = splitVoiceSections(text);
       if (chunks.length === 0) return;
       setIsSpeaking(true);
+      setIsVoicePaused(false);
       const speakChunk = (index: number) => {
         if (voiceRunRef.current !== runId) return;
         const chunk = chunks[index];
         if (!chunk) {
           setIsSpeaking(false);
+          setIsVoicePaused(false);
           return;
         }
         const utterance = new SpeechSynthesisUtterance(chunk);
@@ -305,6 +343,7 @@ export function useMorningBriefing({
       if (isElevenLabsConfigured(settings)) {
         const chunks = splitVoiceSections(text);
         setIsSpeaking(true);
+        setIsVoicePaused(false);
         for (const chunk of chunks) {
           if (voiceRunRef.current !== runId) return;
           setIsGeneratingVoice(true);
@@ -343,6 +382,7 @@ export function useMorningBriefing({
           cleanupAudioObjectUrl();
         }
         if (voiceRunRef.current === runId) setIsSpeaking(false);
+        if (voiceRunRef.current === runId) setIsVoicePaused(false);
         return;
       }
 
@@ -518,6 +558,7 @@ export function useMorningBriefing({
     availableVoices,
     isGeneratingVoice,
     isSpeaking,
+    isVoicePaused,
     voiceError,
     morningPublishStatus,
     setMorningPublishStatus,
@@ -530,6 +571,8 @@ export function useMorningBriefing({
     commandStatus,
     speakMorningBriefing,
     stopMorningBriefing,
+    pauseMorningBriefing,
+    resumeMorningBriefing,
     openMorningBriefing,
     playText: playTextWithEngine,
     downloadMorningBriefing,

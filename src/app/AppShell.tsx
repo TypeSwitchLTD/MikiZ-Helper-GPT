@@ -15,6 +15,7 @@ import { CommandCenterModal } from "../features/morning/CommandCenterModal";
 import { ReadyCheckModal } from "../features/morning/ReadyCheckModal";
 import { FocusTab } from "../features/focus/FocusTab";
 import { FocusTimerModal } from "../features/focus/FocusTimerModal";
+import { ProcessesTab } from "../features/processes/ProcessesTab";
 import { useMorningBriefing } from "../features/morning/useMorningBriefing";
 import { getTaskProgress } from "../domain/tasks/taskProgress";
 import { getSubtasksForTask } from "../domain/tasks/taskSelectors";
@@ -25,7 +26,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.14";
+const APP_VERSION = "0.8.17";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -284,6 +285,15 @@ function NavIcon({ tabId, className }: { tabId: string; className?: string }) {
           <circle cx="12" cy="12" r="8" />
           <circle cx="12" cy="12" r="3" />
           <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+        </svg>
+      );
+    case "processes":
+      return (
+        <svg {...SVG_BASE} className={cls}>
+          <path d="M6 4h12v5H6z" />
+          <path d="M6 15h12v5H6z" />
+          <path d="M12 9v6" />
+          <path d="M8 12h8" />
         </svg>
       );
     case "workouts":
@@ -963,6 +973,23 @@ export function AppShell() {
             onCompleteFocusItem={data.completeFocusDeckItem}
             onRemoveFocusItem={data.removeFocusDeckItem}
             onClearFocus={data.clearFocusDeck}
+            onJumpToTask={(taskId) => {
+              setActiveTab("tasks");
+              setFocusedTaskId(taskId);
+              setSearchQuery("");
+            }}
+          />
+        );
+      case "processes":
+        return (
+          <ProcessesTab
+            tasks={data.tasks}
+            subtasks={data.subtasks}
+            settings={data.settings}
+            isSaving={data.isSaving}
+            onAddSubtaskToTask={data.addSubtaskToExistingTask}
+            onChangeSubtaskStatus={data.changeSubtaskStatus}
+            onAddSubtaskToFocus={data.addSubtaskToFocusDeck}
             onJumpToTask={(taskId) => {
               setActiveTab("tasks");
               setFocusedTaskId(taskId);
@@ -1789,6 +1816,7 @@ export function AppShell() {
           isMorningLoading={morning.isMorningLoading}
           isGeneratingVoice={morning.isGeneratingVoice}
           isSpeaking={morning.isSpeaking}
+          isVoicePaused={morning.isVoicePaused}
           voiceError={morning.voiceError}
           morningPublishStatus={morning.morningPublishStatus}
           voiceStatus={morning.voiceStatus}
@@ -1797,6 +1825,8 @@ export function AppShell() {
           setSelectedVoiceName={morning.setSelectedVoiceName}
           speakMorningBriefing={morning.speakMorningBriefing}
           stopMorningBriefing={morning.stopMorningBriefing}
+          pauseMorningBriefing={morning.pauseMorningBriefing}
+          resumeMorningBriefing={morning.resumeMorningBriefing}
           downloadMorningBriefing={morning.downloadMorningBriefing}
           publishMorningBriefingForAndroid={morning.publishMorningBriefingForAndroid}
           onClose={() => morning.setShowMorningBriefing(false)}

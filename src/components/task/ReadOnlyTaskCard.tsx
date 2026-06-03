@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Reminder } from "../../domain/reminders/reminderTypes";
 import type { AppSettings } from "../../domain/settings/settingsTypes";
+import { LinkifiedText } from "../ui/LinkifiedText";
 import type {
   BacklogGroup,
   Subtask,
@@ -554,6 +555,26 @@ export function ReadOnlyTaskCard({
     await onMoveToBacklogGroup(task, backlogGroup);
   };
 
+  const handleAddTaskToFocus = async () => {
+    if (!onAddTaskToFocus) return;
+    setActionError("");
+    try {
+      await onAddTaskToFocus(task.id);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "לא ניתן להוסיף לפוקוס כרגע.");
+    }
+  };
+
+  const handleAddSubtaskToFocus = async (subtaskId: string) => {
+    if (!onAddSubtaskToFocus) return;
+    setActionError("");
+    try {
+      await onAddSubtaskToFocus(task.id, subtaskId);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "לא ניתן להוסיף לפוקוס כרגע.");
+    }
+  };
+
   const handleChangeDate = async () => {
     if (!onChangeTaskDate) return;
     if (!targetDate) {
@@ -628,7 +649,7 @@ export function ReadOnlyTaskCard({
               <h3
                 className={`mobile-clamp-2 min-w-0 text-base font-black leading-tight sm:truncate sm:text-lg ${isDone ? "text-rose-950/70 line-through decoration-rose-400 decoration-2" : "text-slate-950"}`}
               >
-                {task.title}
+                <LinkifiedText text={task.title} />
               </h3>
             </div>
           </div>
@@ -746,12 +767,12 @@ export function ReadOnlyTaskCard({
         <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 sm:mt-4 sm:space-y-3 sm:pt-4">
           {task.whyNow ? (
             <p className="rounded-2xl bg-sky-50 px-3 py-2 text-xs text-slate-700 sm:text-sm">
-              {task.whyNow}
+              <LinkifiedText text={task.whyNow} />
             </p>
           ) : null}
           {task.notes ? (
             <p className="rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-600 sm:text-sm">
-              {task.notes}
+              <LinkifiedText text={task.notes} />
             </p>
           ) : null}
           {taskAiUrl ? (
@@ -880,7 +901,7 @@ export function ReadOnlyTaskCard({
                       </p>
                       {subtask.notes ? (
                         <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
-                          {subtask.notes}
+                          <LinkifiedText text={subtask.notes} />
                         </p>
                       ) : null}
                     </div>
@@ -906,7 +927,7 @@ export function ReadOnlyTaskCard({
                           type="button"
                           className="rounded-2xl bg-cyan-50 px-3 py-1.5 text-xs font-black text-cyan-800 ring-1 ring-cyan-100 transition hover:bg-cyan-100 disabled:opacity-40"
                           disabled={isSaving}
-                          onClick={() => void onAddSubtaskToFocus(task.id, subtask.id)}
+                          onClick={() => void handleAddSubtaskToFocus(subtask.id)}
                         >
                           + פוקוס
                         </button>
@@ -994,7 +1015,7 @@ export function ReadOnlyTaskCard({
                   type="button"
                   className="rounded-2xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800 ring-1 ring-cyan-100 hover:bg-cyan-100 transition disabled:opacity-40"
                   disabled={isSaving || !onAddTaskToFocus}
-                  onClick={() => void onAddTaskToFocus?.(task.id)}
+                  onClick={() => void handleAddTaskToFocus()}
                 >
                   + פוקוס
                 </button>

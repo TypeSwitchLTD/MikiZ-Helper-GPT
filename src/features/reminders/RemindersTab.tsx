@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { LinkifiedText } from '../../components/ui/LinkifiedText';
 import type { Reminder } from '../../domain/reminders/reminderTypes';
 import type { Task } from '../../domain/tasks/taskTypes';
 
@@ -227,11 +228,11 @@ export function RemindersTab({
                               ) : null}
                             </div>
                             <h3 className="mt-1.5 text-sm font-black leading-snug text-slate-950">
-                              {reminder.title}
+                              <LinkifiedText text={reminder.title} />
                             </h3>
                             {reminder.note ? (
                               <p className="mt-0.5 line-clamp-2 text-xs font-bold text-slate-500">
-                                {reminder.note}
+                                <LinkifiedText text={reminder.note} />
                               </p>
                             ) : null}
                           </div>
