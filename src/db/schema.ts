@@ -6,10 +6,11 @@ import type { DailyReport } from '../domain/reports/reportTypes';
 import type { Reminder } from '../domain/reminders/reminderTypes';
 import type { AppSettings } from '../domain/settings/settingsTypes';
 import type { Subtask, Task } from '../domain/tasks/taskTypes';
+import type { DailyHabit, DailyHabitLog } from '../domain/habits/habitTypes';
 
 export const DATABASE_NAME = 'mission-control-local';
 export const DATABASE_VERSION = 7;
-export const APP_VERSION = '0.8.17';
+export const APP_VERSION = '0.8.18';
 
 export interface BackupSnapshot {
   id: string;
@@ -25,6 +26,8 @@ export interface BackupSnapshot {
     logs: LogEvent[];
     reminders?: Reminder[];
     focusItems?: FocusItem[];
+    habits?: DailyHabit[];
+    habitLogs?: DailyHabitLog[];
     settings: AppSettings;
   };
 }

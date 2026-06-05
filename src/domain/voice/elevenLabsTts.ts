@@ -15,6 +15,9 @@ export interface ElevenLabsConfigStatus {
   mode: 'proxy' | 'local-dev-proxy' | 'cloudflare-proxy' | 'direct' | 'missing';
 }
 
+const memoryAudioCache = new Map<string, Blob>();
+const MAX_MEMORY_AUDIO_CACHE_ITEMS = 3;
+
 function getVoice(settings: AppSettings | null) {
   return settings?.voice ?? null;
 }
@@ -108,7 +111,7 @@ async function sha256Text(value: string): Promise<string> {
 function buildAudioCachePayload(text: string, settings: AppSettings | null): string {
   const voice = getVoice(settings);
   return JSON.stringify({
-    text,
+    text: text.replace(/\s+/g, ' ').trim(),
     voiceId: voice?.elevenLabsVoiceId?.trim() ?? '',
     modelId: resolveElevenLabsModelId(settings),
     outputFormat: voice?.elevenLabsOutputFormat?.trim() || 'mp3_44100_128',
@@ -120,16 +123,30 @@ function buildAudioCachePayload(text: string, settings: AppSettings | null): str
 }
 
 async function getCachedAudioUrl(cacheKey: string): Promise<string | null> {
+  const memoryBlob = memoryAudioCache.get(cacheKey);
+  if (memoryBlob && memoryBlob.size > 0) {
+    return URL.createObjectURL(memoryBlob);
+  }
   if (typeof caches === 'undefined') return null;
   const cache = await caches.open('mission-control-elevenlabs-v1');
   const cached = await cache.match(cacheKey);
   if (!cached) return null;
   const blob = await cached.blob();
+  if (blob.size > 0) {
+    memoryAudioCache.set(cacheKey, blob);
+  }
   return blob.size > 0 ? URL.createObjectURL(blob) : null;
 }
 
 async function putCachedAudio(cacheKey: string, blob: Blob): Promise<void> {
-  if (typeof caches === 'undefined' || blob.size === 0) return;
+  if (blob.size === 0) return;
+  memoryAudioCache.set(cacheKey, blob);
+  while (memoryAudioCache.size > MAX_MEMORY_AUDIO_CACHE_ITEMS) {
+    const oldestKey = memoryAudioCache.keys().next().value;
+    if (!oldestKey) break;
+    memoryAudioCache.delete(oldestKey);
+  }
+  if (typeof caches === 'undefined') return;
   const cache = await caches.open('mission-control-elevenlabs-v1');
   await cache.put(cacheKey, new Response(blob, { headers: { 'Content-Type': blob.type || 'audio/mpeg' } }));
 }

@@ -6,6 +6,7 @@ import type { DailyReport } from '../reports/reportTypes';
 import type { Reminder } from '../reminders/reminderTypes';
 import type { AppSettings } from '../settings/settingsTypes';
 import type { Subtask, Task } from '../tasks/taskTypes';
+import type { DailyHabit, DailyHabitLog } from '../habits/habitTypes';
 
 export interface CloudSyncPayload {
   schemaVersion: '0.6.0';
@@ -19,6 +20,8 @@ export interface CloudSyncPayload {
   logs: LogEvent[];
   reminders: Reminder[];
   focusItems?: FocusItem[];
+  habits?: DailyHabit[];
+  habitLogs?: DailyHabitLog[];
   settings: AppSettings;
 }
 

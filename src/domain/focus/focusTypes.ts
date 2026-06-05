@@ -8,6 +8,9 @@ export interface FocusItem {
   titleSnapshot: string;
   parentTitleSnapshot?: string | null;
   sortOrder: number;
+  manualProgressPercent?: number;
+  focusTimeSpentSeconds?: number;
+  activeStartedAt?: string | null;
   addedAt: string;
   updatedAt: string;
   completedAt?: string | null;

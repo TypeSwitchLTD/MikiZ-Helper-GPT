@@ -26,7 +26,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.17";
+const APP_VERSION = "0.8.18";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -358,6 +358,7 @@ export function AppShell() {
   });
   const [focusSeconds, setFocusSeconds] = useState(20 * 60);
   const [focusRunning, setFocusRunning] = useState(false);
+  const focusEndsAtRef = useRef<number | null>(null);
   const [authPin, setAuthPin] = useState("");
   const [authError, setAuthError] = useState("");
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
@@ -614,80 +615,106 @@ export function AppShell() {
   }, []);
 
   // ─── Focus timer ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!focusRunning) return;
-    const id = window.setInterval(() => {
-      setFocusSeconds((current) => {
-        if (current <= 1) {
-          setFocusRunning(false);
-          setFocusEndToast("הפסקה. הטיימר הסתיים, קח רגע לנשום.");
+  const finishFocusTimer = useCallback(() => {
+    focusEndsAtRef.current = null;
+    setFocusRunning(false);
+    setFocusSeconds(5 * 60);
+    setFocusEndToast("הפסקה. הטיימר הסתיים, קח רגע לנשום.");
+    try {
+      const AC =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AC) {
+        const ctx = new AC();
+        const scheduleNotes = () => {
+          [0, 0.85, 1.7].forEach((repeatOffset) => {
+            [659.25, 830.61, 987.77].forEach((freq, i) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = "sine";
+              osc.frequency.value = freq;
+              const t = ctx.currentTime + repeatOffset + i * 0.16;
+              gain.gain.setValueAtTime(0, t);
+              gain.gain.linearRampToValueAtTime(0.12, t + 0.025);
+              gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(t);
+              osc.stop(t + 0.5);
+            });
+          });
+          window.setTimeout(() => void ctx.close(), 3400);
+        };
+        ctx.state === "suspended"
+          ? void ctx.resume().then(scheduleNotes)
+          : scheduleNotes();
+      }
+    } catch {
+      /* best-effort */
+    }
+    if ("Notification" in window && Notification.permission === "granted") {
+      void navigator.serviceWorker?.ready
+        .then((reg) =>
+          reg.showNotification("הפסקה", {
+            body: "הטיימר הסתיים. קח הפסקה קצרה.",
+            tag: "focus-timer",
+            silent: false,
+          }),
+        )
+        .catch(() => {
           try {
-            const AC =
-              window.AudioContext ||
-              (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-            if (AC) {
-              const ctx = new AC();
-              const scheduleNotes = () => {
-                [0, 0.85, 1.7].forEach((repeatOffset) => {
-                  [659.25, 830.61, 987.77].forEach((freq, i) => {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.type = "sine";
-                    osc.frequency.value = freq;
-                    const t = ctx.currentTime + repeatOffset + i * 0.16;
-                    gain.gain.setValueAtTime(0, t);
-                    gain.gain.linearRampToValueAtTime(0.12, t + 0.025);
-                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.start(t);
-                    osc.stop(t + 0.5);
-                  });
-                });
-                window.setTimeout(() => void ctx.close(), 3400);
-              };
-              ctx.state === "suspended"
-                ? void ctx.resume().then(scheduleNotes)
-                : scheduleNotes();
-            }
+            new Notification("הפסקה", {
+              body: "הטיימר הסתיים. קח הפסקה קצרה.",
+              tag: "focus-timer",
+              silent: false,
+            });
           } catch {
             /* best-effort */
           }
-          if ("Notification" in window && Notification.permission === "granted") {
-            void navigator.serviceWorker?.ready
-              .then((reg) =>
-                reg.showNotification("הפסקה", {
-                  body: "הטיימר הסתיים. קח הפסקה קצרה.",
-                  tag: "focus-timer",
-                  silent: false,
-                }),
-              )
-              .catch(() => {
-                try {
-                  new Notification("הפסקה", {
-                    body: "הטיימר הסתיים. קח הפסקה קצרה.",
-                    tag: "focus-timer",
-                    silent: false,
-                  });
-                } catch {
-                  /* best-effort */
-                }
-              });
-          }
-          return 5 * 60;
-        }
-        return current - 1;
-      });
-    }, 1000);
+        });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!focusRunning) return;
+    if (!focusEndsAtRef.current) {
+      focusEndsAtRef.current = Date.now() + focusSeconds * 1000;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil(((focusEndsAtRef.current ?? Date.now()) - Date.now()) / 1000));
+      setFocusSeconds(remaining);
+      if (remaining <= 0) finishFocusTimer();
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [focusRunning]);
+  }, [finishFocusTimer, focusRunning]);
 
   const focusTimerLabel = `${Math.floor(focusSeconds / 60).toString().padStart(2, "0")}:${(focusSeconds % 60).toString().padStart(2, "0")}`;
 
   const startFocusTimer = useCallback(() => {
     if ("Notification" in window && Notification.permission === "default")
       void Notification.requestPermission();
+    focusEndsAtRef.current = Date.now() + focusSeconds * 1000;
     setFocusRunning(true);
+  }, [focusSeconds]);
+
+  const stopFocusTimer = useCallback(() => {
+    focusEndsAtRef.current = null;
+    setFocusRunning(false);
+  }, []);
+
+  const resetFocusTimer = useCallback(() => {
+    focusEndsAtRef.current = null;
+    setFocusRunning(false);
+    setFocusSeconds(20 * 60);
+  }, []);
+
+  const setFocusTimerMinutes = useCallback((minutes: number) => {
+    const seconds = minutes * 60;
+    focusEndsAtRef.current = null;
+    setFocusRunning(false);
+    setFocusSeconds(seconds);
   }, []);
 
   // ─── Derived counts ───────────────────────────────────────────────────────────
@@ -966,13 +993,15 @@ export function AppShell() {
             focusRunning={focusRunning}
             isSaving={data.isSaving}
             onStartTimer={startFocusTimer}
-            onStopTimer={() => setFocusRunning(false)}
-            onResetTimer={() => { setFocusRunning(false); setFocusSeconds(20 * 60); }}
-            onSetTimerMinutes={(minutes) => { setFocusRunning(false); setFocusSeconds(minutes * 60); }}
+            onStopTimer={stopFocusTimer}
+            onResetTimer={resetFocusTimer}
+            onSetTimerMinutes={setFocusTimerMinutes}
             onOpenTimer={() => setFocusTimerOpen(true)}
             onCompleteFocusItem={data.completeFocusDeckItem}
             onRemoveFocusItem={data.removeFocusDeckItem}
             onClearFocus={data.clearFocusDeck}
+            onUpdateFocusProgress={data.updateFocusDeckProgress}
+            onAddFocusTime={data.addFocusDeckTime}
             onJumpToTask={(taskId) => {
               setActiveTab("tasks");
               setFocusedTaskId(taskId);
@@ -1916,9 +1945,9 @@ export function AppShell() {
           focusSeconds={focusSeconds}
           focusRunning={focusRunning}
           onStart={startFocusTimer}
-          onStop={() => setFocusRunning(false)}
-          onReset={() => { setFocusRunning(false); setFocusSeconds(20 * 60); }}
-          onSetMinutes={(minutes) => { setFocusRunning(false); setFocusSeconds(minutes * 60); }}
+          onStop={stopFocusTimer}
+          onReset={resetFocusTimer}
+          onSetMinutes={setFocusTimerMinutes}
           onClose={() => setFocusTimerOpen(false)}
         />
       ) : null}

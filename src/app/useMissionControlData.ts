@@ -3,7 +3,7 @@ import { getAllLocalData, importDailyStatePayload, initializeLocalDatabase, roll
 import { hasCloudSyncToken, pullCloudSyncPayload, pushCloudSyncPayload, type CloudSyncPayload } from '../domain/cloud/cloudSync';
 import { db } from '../db/db';
 import type { DailyPlan, DailyPlanBlock } from '../domain/dailyPlans/dailyPlanTypes';
-import { addSubtaskToFocus, addTaskToFocus, clearFocusItems, completeFocusItem, removeFocusItem } from '../domain/focus/focusMutations';
+import { addFocusItemTime, addSubtaskToFocus, addTaskToFocus, clearFocusItems, completeFocusItem, removeFocusItem, updateFocusItemProgress } from '../domain/focus/focusMutations';
 import type { FocusItem } from '../domain/focus/focusTypes';
 import type { LogEvent } from '../domain/logs/logTypes';
 import { replaceRecurringDefinitionsFromTaskImport, softDeleteAllRecurringDefinitions } from '../domain/recurring/recurringMutations';
@@ -43,7 +43,7 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.17-linkified-text';
+const CLIENT_APP_VERSION = '0.8.18-focus-sync';
 const CLOUD_SYNC_DEBOUNCE_MS = 1500;
 
 interface MissionControlData {
@@ -158,6 +158,8 @@ function buildCloudSyncPayload(localData: MissionControlData): CloudSyncPayload 
     logs: localData.logs,
     reminders: localData.reminders,
     focusItems: localData.focusItems,
+    habits: localData.habits,
+    habitLogs: localData.habitLogs,
     settings: localData.settings,
   };
 }
@@ -698,7 +700,7 @@ export function useMissionControlData() {
       try {
         setIsSaving(true);
         await createHabit(input);
-        await reloadData();
+        await reloadDataAndPushCloud();
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown habit create error');
         throw saveError;
@@ -706,7 +708,7 @@ export function useMissionControlData() {
         setIsSaving(false);
       }
     },
-    [reloadData],
+    [reloadDataAndPushCloud],
   );
 
   const editHabit = useCallback(
@@ -714,7 +716,7 @@ export function useMissionControlData() {
       try {
         setIsSaving(true);
         await updateHabit(habitId, patch);
-        await reloadData();
+        await reloadDataAndPushCloud();
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown habit update error');
         throw saveError;
@@ -722,7 +724,7 @@ export function useMissionControlData() {
         setIsSaving(false);
       }
     },
-    [reloadData],
+    [reloadDataAndPushCloud],
   );
 
   const removeHabit = useCallback(
@@ -730,7 +732,7 @@ export function useMissionControlData() {
       try {
         setIsSaving(true);
         await deleteHabit(habitId);
-        await reloadData();
+        await reloadDataAndPushCloud();
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown habit delete error');
         throw saveError;
@@ -738,31 +740,31 @@ export function useMissionControlData() {
         setIsSaving(false);
       }
     },
-    [reloadData],
+    [reloadDataAndPushCloud],
   );
 
   const changeHabitOrder = useCallback(
     async (orderedIds: string[]) => {
       try {
         await reorderHabits(orderedIds);
-        await reloadData();
+        await reloadDataAndPushCloud();
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown habit reorder error');
       }
     },
-    [reloadData],
+    [reloadDataAndPushCloud],
   );
 
   const nudgeHabitCount = useCallback(
     async (habitId: string, date: string, delta: number) => {
       try {
         await incrementHabitCount(habitId, date, delta);
-        await reloadData();
+        await reloadDataAndPushCloud();
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : 'Unknown habit count update error');
       }
     },
-    [reloadData],
+    [reloadDataAndPushCloud],
   );
 
   const clearAllTasks = useCallback(async () => {
@@ -880,6 +882,34 @@ export function useMissionControlData() {
         throw saveError;
       } finally {
         setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const updateFocusDeckProgress = useCallback(
+    async (focusItemId: string, progressPercent: number) => {
+      try {
+        setIsSaving(true);
+        await updateFocusItemProgress(focusItemId, progressPercent);
+        await reloadDataAndPushCloud();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Unknown focus progress update error');
+        throw saveError;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addFocusDeckTime = useCallback(
+    async (focusItemId: string, seconds: number) => {
+      try {
+        await addFocusItemTime(focusItemId, seconds);
+        await reloadDataAndPushCloud();
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : 'Unknown focus time update error');
       }
     },
     [reloadDataAndPushCloud],
@@ -1062,5 +1092,7 @@ export function useMissionControlData() {
     removeFocusDeckItem,
     clearFocusDeck,
     completeFocusDeckItem,
+    updateFocusDeckProgress,
+    addFocusDeckTime,
   };
 }

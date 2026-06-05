@@ -227,7 +227,7 @@ async function seedDatabaseIfNeeded(): Promise<void> {
         const snapshots = await db.snapshots.toArray();
         const hasCurrentVersionSnapshot = snapshots.some((snapshot) => snapshot.reason === 'app_update' && snapshot.appVersion === APP_VERSION);
         if (!hasCurrentVersionSnapshot) {
-          const [tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, focusItems] = await Promise.all([
+          const [tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, habits, habitLogs, focusItems] = await Promise.all([
             db.tasks.toArray(),
             db.subtasks.toArray(),
             db.dailyPlans.toArray(),
@@ -235,6 +235,8 @@ async function seedDatabaseIfNeeded(): Promise<void> {
             db.reports.toArray(),
             db.logs.toArray(),
             db.reminders.toArray(),
+            db.habits.toArray(),
+            db.habitLogs.toArray(),
             db.focusItems.toArray(),
           ]);
           await db.snapshots.add({
@@ -242,7 +244,7 @@ async function seedDatabaseIfNeeded(): Promise<void> {
             createdAt: timestamp,
             reason: 'app_update',
             appVersion: APP_VERSION,
-            data: { tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, focusItems, settings },
+            data: { tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, habits, habitLogs, focusItems, settings },
           });
         }
       }
@@ -270,6 +272,8 @@ async function seedDatabaseIfNeeded(): Promise<void> {
             reports: [],
             logs: [],
             reminders: [],
+            habits: [],
+            habitLogs: [],
             focusItems: [],
             settings,
           },
@@ -334,6 +338,8 @@ interface DailyStateImportPayload {
   logs?: LogEvent[];
   reminders?: Reminder[];
   focusItems?: FocusItem[];
+  habits?: DailyHabit[];
+  habitLogs?: DailyHabitLog[];
   settings?: AppSettings | null;
 }
 
@@ -368,10 +374,14 @@ export async function importDailyStatePayload(
   const reports = asArray(payload.reports);
   const logs = asArray(payload.logs);
   const reminders = asArray(payload.reminders);
+  const hasHabitPayload = Array.isArray(payload.habits);
+  const hasHabitLogPayload = Array.isArray(payload.habitLogs);
   const focusItems = asArray(payload.focusItems);
+  const habits = asArray(payload.habits);
+  const habitLogs = asArray(payload.habitLogs);
   const settings = payload.settings ?? undefined;
 
-  if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0 && focusItems.length === 0 && !settings) {
+  if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0 && focusItems.length === 0 && habits.length === 0 && habitLogs.length === 0 && !settings) {
     throw new Error('Daily State JSON לא מכיל משימות / תתי־משימות / תוכניות יום לייבוא.');
   }
 
@@ -435,12 +445,21 @@ export async function importDailyStatePayload(
       if (reports.length) await db.reports.bulkPut(reports);
       if (logs.length) await db.logs.bulkPut(logs);
       if (reminders.length) await db.reminders.bulkPut(reminders);
+      if (hasHabitPayload) {
+        await db.habits.clear();
+        if (habits.length) await db.habits.bulkPut(habits);
+      }
+      if (hasHabitLogPayload) {
+        await db.habitLogs.clear();
+        if (habitLogs.length) await db.habitLogs.bulkPut(habitLogs);
+      }
       if (focusItems.length) {
         const existingFocusItems = await db.focusItems.bulkGet(focusItems.map((item) => item.id));
         const mergedFocusItems = focusItems.map((item, index) => {
           const existing = existingFocusItems[index];
           if (existing?.deletedAt && !item.deletedAt) return existing;
           if (existing?.completedAt && !item.completedAt) return existing;
+          if (existing && (Date.parse(existing.updatedAt ?? '') || 0) > (Date.parse(item.updatedAt ?? '') || 0)) return existing;
           return item;
         });
         await db.focusItems.bulkPut(mergedFocusItems);

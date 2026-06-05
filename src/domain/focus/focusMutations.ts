@@ -41,6 +41,9 @@ export async function addTaskToFocus(taskId: string): Promise<FocusItem | null> 
     titleSnapshot: task.title,
     parentTitleSnapshot: null,
     sortOrder: getNextSortOrder(active),
+    manualProgressPercent: 0,
+    focusTimeSpentSeconds: 0,
+    activeStartedAt: null,
     addedAt: timestamp,
     updatedAt: timestamp,
     completedAt: null,
@@ -68,6 +71,9 @@ export async function addSubtaskToFocus(taskId: string, subtaskId: string): Prom
     titleSnapshot: subtask.title,
     parentTitleSnapshot: task.title,
     sortOrder: getNextSortOrder(active),
+    manualProgressPercent: 0,
+    focusTimeSpentSeconds: 0,
+    activeStartedAt: null,
     addedAt: timestamp,
     updatedAt: timestamp,
     completedAt: null,
@@ -102,5 +108,29 @@ export async function completeFocusItem(focusItemId: string): Promise<void> {
       return;
     }
     await db.tasks.update(item.taskId, { completedAt: timestamp, updatedAt: timestamp });
+  });
+}
+
+export async function updateFocusItemProgress(
+  focusItemId: string,
+  progressPercent: number,
+): Promise<void> {
+  const safeProgress = Math.max(0, Math.min(100, Math.round(progressPercent)));
+  await db.focusItems.update(focusItemId, {
+    manualProgressPercent: safeProgress,
+    updatedAt: nowISO(),
+  });
+}
+
+export async function addFocusItemTime(
+  focusItemId: string,
+  seconds: number,
+): Promise<void> {
+  if (!Number.isFinite(seconds) || seconds <= 0) return;
+  const item = await db.focusItems.get(focusItemId);
+  if (!item || item.deletedAt) return;
+  await db.focusItems.update(focusItemId, {
+    focusTimeSpentSeconds: Math.max(0, Math.round(item.focusTimeSpentSeconds ?? 0) + Math.round(seconds)),
+    updatedAt: nowISO(),
   });
 }

@@ -233,8 +233,14 @@ export async function onRequestGet({ request, env }) {
 
     const storedSettings = arr(settingsRows)[0]?.settings || null;
     const focusItems = arr(storedSettings?.focusItems);
+    const habits = arr(storedSettings?.habits);
+    const habitLogs = arr(storedSettings?.habitLogs);
     const settings = storedSettings ? { ...storedSettings } : null;
-    if (settings) delete settings.focusItems;
+    if (settings) {
+      delete settings.focusItems;
+      delete settings.habits;
+      delete settings.habitLogs;
+    }
     const payload = {
       schemaVersion: '0.6.0',
       exportedAt: new Date().toISOString(),
@@ -247,14 +253,16 @@ export async function onRequestGet({ request, env }) {
       logs,
       reminders,
       focusItems,
+      habits,
+      habitLogs,
       settings,
     };
 
     return json({
       ok: true,
-      hasData: tasks.length > 0 || subtasks.length > 0 || reminders.length > 0 || focusItems.length > 0 || Boolean(settings),
+      hasData: tasks.length > 0 || subtasks.length > 0 || reminders.length > 0 || focusItems.length > 0 || habits.length > 0 || habitLogs.length > 0 || Boolean(settings),
       payload,
-      counts: { tasks: tasks.length, subtasks: subtasks.length, reminders: reminders.length, focusItems: focusItems.length, logs: logs.length },
+      counts: { tasks: tasks.length, subtasks: subtasks.length, reminders: reminders.length, focusItems: focusItems.length, habits: habits.length, habitLogs: habitLogs.length, logs: logs.length },
       syncedAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -285,11 +293,15 @@ export async function onRequestPost({ request, env }) {
     counts.logs = await upsertRows(config, 'daily_logs', arr(payload.logs).slice(0, 250).map((item) => mapLog(item, config.workspaceId)));
 
     counts.focusItems = arr(payload.focusItems).length;
+    counts.habits = arr(payload.habits).length;
+    counts.habitLogs = arr(payload.habitLogs).length;
 
-    if (payload.settings || counts.focusItems > 0) {
+    if (payload.settings || counts.focusItems > 0 || counts.habits > 0 || counts.habitLogs > 0) {
       const settingsForCloud = {
         ...(payload.settings || {}),
         focusItems: arr(payload.focusItems),
+        habits: arr(payload.habits),
+        habitLogs: arr(payload.habitLogs),
       };
       await restFetch(config, 'app_settings?on_conflict=id', {
         method: 'POST',

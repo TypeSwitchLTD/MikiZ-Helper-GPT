@@ -789,6 +789,78 @@ export function ReadOnlyTaskCard({
             </button>
           ) : null}
 
+          {canUseTaskActions ? (
+            <div
+              className="sticky top-2 z-10 grid grid-cols-2 gap-2 rounded-2xl bg-white/95 p-2 shadow-sm ring-1 ring-slate-200 backdrop-blur sm:flex sm:flex-wrap"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className={`rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${isTextEditOpen ? "bg-sky-600 text-white ring-sky-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-sky-50 hover:text-sky-800"}`}
+                disabled={!onUpdateTaskText}
+                onClick={() => setIsTextEditOpen((c) => !c)}
+              >
+                עריכה
+              </button>
+              <button
+                type="button"
+                className={`rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${isDetailsEditOpen ? "bg-indigo-600 text-white ring-indigo-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-indigo-50 hover:text-indigo-700"}`}
+                disabled={!onUpdateTaskDetails}
+                onClick={() => setIsDetailsEditOpen((c) => !c)}
+              >
+                פרטים
+              </button>
+              <button
+                type="button"
+                className={`rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${isAddSubtaskOpen ? "bg-emerald-600 text-white ring-emerald-600" : "bg-emerald-50 text-emerald-700 ring-emerald-100 hover:bg-emerald-100"}`}
+                disabled={!onAddSubtaskToTask}
+                onClick={() => setIsAddSubtaskOpen((c) => !c)}
+              >
+                + תת־משימה
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-100 transition hover:bg-amber-100"
+                disabled={!onAddReminder}
+                onClick={() => openReminderBubble({ type: "task", title: task.title })}
+              >
+                {taskReminderLabel ? `תזכורת ${taskReminderLabel}` : "תזכורת"}
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-800 ring-1 ring-cyan-100 transition hover:bg-cyan-100 disabled:opacity-40"
+                disabled={isSaving || !onAddTaskToFocus}
+                onClick={() => void handleAddTaskToFocus()}
+              >
+                + פוקוס
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-800 ring-1 ring-orange-100 transition hover:bg-orange-100 disabled:opacity-40"
+                disabled={!onOpenFocusTimer}
+                onClick={() => onOpenFocusTimer?.()}
+              >
+                טיימר
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-800 ring-1 ring-sky-100 transition hover:bg-sky-100 disabled:opacity-40"
+                disabled={isSaving || !onChangeTaskDate || task.bucket === "today"}
+                onClick={() => void handleMoveToday()}
+              >
+                היום
+              </button>
+              <button
+                type="button"
+                className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-100"
+                disabled={isSaving || !onMoveToTomorrow}
+                onClick={() => void handleMoveTomorrow()}
+              >
+                מחר
+              </button>
+            </div>
+          ) : null}
+
           {taskSubtasks.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3 py-2 text-[11px] font-black text-slate-600 ring-1 ring-slate-200">
               <span className="text-slate-900">עבודה פתוחה: {activeWorkSubtasks.length}</span>
