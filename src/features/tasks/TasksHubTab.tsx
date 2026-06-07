@@ -31,6 +31,7 @@ interface TasksHubTabProps {
     subtaskId: string,
     status: Subtask["status"],
   ) => Promise<void> | void;
+  onCompleteTask?: (taskId: string) => Promise<void> | void;
   onMoveToTomorrow: (task: Task) => Promise<void> | void;
   onMoveToBacklogGroup?: (task: Task, backlogGroup: BacklogGroup) => Promise<void> | void;
   onChangeTaskDate: (task: Task, targetDate: string) => Promise<void> | void;
@@ -300,6 +301,7 @@ export function TasksHubTab({
   isSaving,
   focusedTaskId,
   onChangeSubtaskStatus,
+  onCompleteTask,
   onMoveToTomorrow,
   onMoveToBacklogGroup,
   onChangeTaskDate,
@@ -706,6 +708,7 @@ export function TasksHubTab({
                           settings={settings}
                           isSaving={isSaving}
                           onChangeSubtaskStatus={onChangeSubtaskStatus}
+                          onCompleteTask={onCompleteTask}
                           onMoveToTomorrow={onMoveToTomorrow}
                           onMoveToBacklogGroup={onMoveToBacklogGroup}
                           onChangeTaskDate={onChangeTaskDate}
@@ -753,6 +756,7 @@ export function TasksHubTab({
                   settings={settings}
                   isSaving={isSaving}
                   onChangeSubtaskStatus={onChangeSubtaskStatus}
+                  onCompleteTask={onCompleteTask}
                   onMoveToTomorrow={onMoveToTomorrow}
                   onMoveToBacklogGroup={onMoveToBacklogGroup}
                   onChangeTaskDate={onChangeTaskDate}

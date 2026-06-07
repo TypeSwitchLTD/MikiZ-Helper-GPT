@@ -29,6 +29,7 @@ interface ReadOnlyTaskCardProps {
     subtaskId: string,
     status: SubtaskStatus,
   ) => Promise<void> | void;
+  onCompleteTask?: (taskId: string) => Promise<void> | void;
   onMoveToTomorrow?: (task: Task) => Promise<void> | void;
   onMoveToBacklogGroup?: (task: Task, backlogGroup: BacklogGroup) => Promise<void> | void;
   onChangeTaskDate?: (task: Task, targetDate: string) => Promise<void> | void;
@@ -244,6 +245,7 @@ export function ReadOnlyTaskCard({
   isCompletedArchived = false,
   settings,
   onChangeSubtaskStatus,
+  onCompleteTask,
   onMoveToTomorrow,
   onMoveToBacklogGroup,
   onChangeTaskDate,
@@ -375,8 +377,17 @@ export function ReadOnlyTaskCard({
   };
 
   const handleToggleTaskDone = async (checked: boolean) => {
-    if (!onChangeSubtaskStatus) return;
     setActionError("");
+    if (taskSubtasks.length === 0) {
+      if (!checked) return;
+      if (!onCompleteTask) {
+        setActionError("לא ניתן לסמן משימה בלי תתי־משימות כבוצעה כרגע.");
+        return;
+      }
+      await onCompleteTask(task.id);
+      return;
+    }
+    if (!onChangeSubtaskStatus) return;
     for (const subtask of taskSubtasks) {
       await onChangeSubtaskStatus(subtask.id, checked ? "done" : "not_started");
     }
@@ -726,13 +737,13 @@ export function ReadOnlyTaskCard({
               <label
                 className="flex items-center gap-1.5 rounded-2xl bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-800 ring-1 ring-slate-200 transition hover:bg-emerald-50 hover:text-emerald-800 hover:ring-emerald-100 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs"
                 onClick={(event) => event.stopPropagation()}
-                title="סמן סוף משימה"
+                title={task.isRecurring ? "סמן שהמופע של היום בוצע" : "סמן סוף משימה"}
               >
-                <span>סוף</span>
+                <span>{task.isRecurring ? "בוצע היום" : "סוף"}</span>
                 <input
                   type="checkbox"
                   checked={isDone}
-                  disabled={isSaving || taskSubtasks.length === 0}
+                  disabled={isSaving || (taskSubtasks.length === 0 && !onCompleteTask)}
                   onChange={(event) =>
                     void handleToggleTaskDone(event.currentTarget.checked)
                   }
@@ -1042,7 +1053,7 @@ export function ReadOnlyTaskCard({
               className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200 space-y-3"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <div className="hidden">
                 <button
                   type="button"
                   className={`rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${isTextEditOpen ? "bg-sky-600 text-white ring-sky-600" : "bg-white text-slate-700 ring-slate-200 hover:bg-sky-50 hover:text-sky-800"}`}
