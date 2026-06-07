@@ -91,6 +91,9 @@ export function ProcessesTab({
     (sum, process) => sum + process.subtasks.filter((subtask) => subtask.status !== "done" && subtask.status !== "cancelled").length,
     0,
   );
+  const nextStepQueue = processes
+    .filter((process) => process.progress.status !== "done" && process.nextSubtask)
+    .slice(0, 5);
 
   const handleAddSteps = async (taskId: string) => {
     const lines = (drafts[taskId] ?? "")
@@ -138,6 +141,49 @@ export function ProcessesTab({
         <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 ring-1 ring-emerald-100">
           {actionStatus}
         </p>
+      ) : null}
+
+      {nextStepQueue.length > 0 ? (
+        <section className="rounded-3xl bg-slate-950 p-4 text-white shadow-soft sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black text-cyan-200">Process queue</p>
+              <h3 className="mt-1 text-2xl font-black">הצעדים הבאים</h3>
+            </div>
+            <p className="text-xs font-bold text-slate-300">תור קצר מתוך התהליכים הפתוחים</p>
+          </div>
+          <div className="mt-4 grid gap-2 lg:grid-cols-5">
+            {nextStepQueue.map((process) => {
+              const next = process.nextSubtask!;
+              return (
+                <div key={next.id} className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15">
+                  <p className="mobile-clamp-2 text-xs font-black text-white">
+                    <LinkifiedText text={next.title} />
+                  </p>
+                  <p className="mt-1 truncate text-[11px] font-bold text-slate-300">{process.task.title}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className="rounded-xl bg-emerald-400 px-2 py-1.5 text-[11px] font-black text-slate-950 disabled:opacity-50"
+                      disabled={isSaving}
+                      onClick={() => void onChangeSubtaskStatus(next.id, "done")}
+                    >
+                      סיים
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-xl bg-white/10 px-2 py-1.5 text-[11px] font-black text-white ring-1 ring-white/15 disabled:opacity-50"
+                      disabled={isSaving || !onAddSubtaskToFocus}
+                      onClick={() => void onAddSubtaskToFocus?.(process.task.id, next.id)}
+                    >
+                      פוקוס
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       ) : null}
 
       {processes.length === 0 ? (

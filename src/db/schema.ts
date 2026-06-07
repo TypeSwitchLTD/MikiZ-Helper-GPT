@@ -10,7 +10,7 @@ import type { DailyHabit, DailyHabitLog } from '../domain/habits/habitTypes';
 
 export const DATABASE_NAME = 'mission-control-local';
 export const DATABASE_VERSION = 7;
-export const APP_VERSION = '0.8.19';
+export const APP_VERSION = '0.8.20';
 
 export interface BackupSnapshot {
   id: string;

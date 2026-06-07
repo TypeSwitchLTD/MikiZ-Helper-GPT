@@ -43,8 +43,8 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.19-recurring-complete';
-const CLOUD_SYNC_DEBOUNCE_MS = 1500;
+const CLIENT_APP_VERSION = '0.8.20-reliable-daily-work';
+const CLOUD_SYNC_DEBOUNCE_MS = 4000;
 
 interface MissionControlData {
   tasks: Task[];

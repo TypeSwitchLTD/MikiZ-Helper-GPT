@@ -26,7 +26,8 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.19";
+const APP_VERSION = "0.8.20";
+const FOCUS_TIMER_STATE_KEY = "mission-control-focus-timer-state";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
 const LOCKOUT_KEY = "mission-control-auth-lockout";
@@ -38,6 +39,29 @@ const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 interface LockoutState { attempts: number; lockedUntil: number | null; }
+interface StoredFocusTimerState { running: boolean; seconds: number; endsAt: number | null; }
+
+function readStoredFocusTimerState(): StoredFocusTimerState {
+  if (typeof window === "undefined") return { running: false, seconds: 20 * 60, endsAt: null };
+  try {
+    const parsed = JSON.parse(localStorage.getItem(FOCUS_TIMER_STATE_KEY) || "null") as Partial<StoredFocusTimerState> | null;
+    const seconds = Number(parsed?.seconds);
+    const endsAt = Number(parsed?.endsAt);
+    if (parsed?.running && Number.isFinite(endsAt)) {
+      if (endsAt <= Date.now()) return { running: true, seconds: 0, endsAt };
+      return { running: true, seconds: Math.max(1, Math.ceil((endsAt - Date.now()) / 1000)), endsAt };
+    }
+    return { running: false, seconds: Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds) : 20 * 60, endsAt: null };
+  } catch {
+    return { running: false, seconds: 20 * 60, endsAt: null };
+  }
+}
+
+function writeStoredFocusTimerState(state: StoredFocusTimerState): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(FOCUS_TIMER_STATE_KEY, JSON.stringify(state));
+}
+
 function readLockout(): LockoutState {
   try {
     const raw = localStorage.getItem(LOCKOUT_KEY);
@@ -356,9 +380,10 @@ export function AppShell() {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("mission-control-quiet-mode") === "true";
   });
-  const [focusSeconds, setFocusSeconds] = useState(20 * 60);
-  const [focusRunning, setFocusRunning] = useState(false);
-  const focusEndsAtRef = useRef<number | null>(null);
+  const [initialFocusTimerState] = useState(readStoredFocusTimerState);
+  const [focusSeconds, setFocusSeconds] = useState(initialFocusTimerState.seconds);
+  const [focusRunning, setFocusRunning] = useState(initialFocusTimerState.running);
+  const focusEndsAtRef = useRef<number | null>(initialFocusTimerState.endsAt);
   const [authPin, setAuthPin] = useState("");
   const [authError, setAuthError] = useState("");
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
@@ -619,6 +644,7 @@ export function AppShell() {
     focusEndsAtRef.current = null;
     setFocusRunning(false);
     setFocusSeconds(5 * 60);
+    writeStoredFocusTimerState({ running: false, seconds: 5 * 60, endsAt: null });
     setFocusEndToast("הפסקה. הטיימר הסתיים, קח רגע לנשום.");
     try {
       const AC =
@@ -679,6 +705,7 @@ export function AppShell() {
     if (!focusRunning) return;
     if (!focusEndsAtRef.current) {
       focusEndsAtRef.current = Date.now() + focusSeconds * 1000;
+      writeStoredFocusTimerState({ running: true, seconds: focusSeconds, endsAt: focusEndsAtRef.current });
     }
     const tick = () => {
       const remaining = Math.max(0, Math.ceil(((focusEndsAtRef.current ?? Date.now()) - Date.now()) / 1000));
@@ -690,24 +717,48 @@ export function AppShell() {
     return () => window.clearInterval(id);
   }, [finishFocusTimer, focusRunning]);
 
+  useEffect(() => {
+    const restoreTimer = () => {
+      const stored = readStoredFocusTimerState();
+      focusEndsAtRef.current = stored.endsAt;
+      setFocusRunning(stored.running);
+      setFocusSeconds(stored.seconds);
+      if (stored.running && stored.seconds <= 0) finishFocusTimer();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") restoreTimer();
+    };
+    window.addEventListener("focus", restoreTimer);
+    window.addEventListener("storage", restoreTimer);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", restoreTimer);
+      window.removeEventListener("storage", restoreTimer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [finishFocusTimer]);
+
   const focusTimerLabel = `${Math.floor(focusSeconds / 60).toString().padStart(2, "0")}:${(focusSeconds % 60).toString().padStart(2, "0")}`;
 
   const startFocusTimer = useCallback(() => {
     if ("Notification" in window && Notification.permission === "default")
       void Notification.requestPermission();
     focusEndsAtRef.current = Date.now() + focusSeconds * 1000;
+    writeStoredFocusTimerState({ running: true, seconds: focusSeconds, endsAt: focusEndsAtRef.current });
     setFocusRunning(true);
   }, [focusSeconds]);
 
   const stopFocusTimer = useCallback(() => {
     focusEndsAtRef.current = null;
     setFocusRunning(false);
-  }, []);
+    writeStoredFocusTimerState({ running: false, seconds: focusSeconds, endsAt: null });
+  }, [focusSeconds]);
 
   const resetFocusTimer = useCallback(() => {
     focusEndsAtRef.current = null;
     setFocusRunning(false);
     setFocusSeconds(20 * 60);
+    writeStoredFocusTimerState({ running: false, seconds: 20 * 60, endsAt: null });
   }, []);
 
   const setFocusTimerMinutes = useCallback((minutes: number) => {
@@ -715,6 +766,7 @@ export function AppShell() {
     focusEndsAtRef.current = null;
     setFocusRunning(false);
     setFocusSeconds(seconds);
+    writeStoredFocusTimerState({ running: false, seconds, endsAt: null });
   }, []);
 
   // ─── Derived counts ───────────────────────────────────────────────────────────

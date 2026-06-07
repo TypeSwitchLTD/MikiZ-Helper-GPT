@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { localISOSeconds } from '../../utils/dates';
 import type { Reminder } from '../../domain/reminders/reminderTypes';
 
-const POLL_MS = 60_000;
+const POLL_MS = 15_000;
 
 /**
  * Keys that already fired this session — format: `${id}:${remindAt}` so that
@@ -120,6 +120,15 @@ export function useReminderChecker(reminders: Reminder[], onDue?: () => void): v
 
     check(); // run immediately on mount
     const timer = setInterval(check, POLL_MS);
-    return () => clearInterval(timer);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []); // stable — uses refs
 }

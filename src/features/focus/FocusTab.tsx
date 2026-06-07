@@ -74,6 +74,7 @@ export function FocusTab({
   const [runningItemId, setRunningItemId] = useState<string | null>(null);
   const [runningStartedAtMs, setRunningStartedAtMs] = useState<number | null>(null);
   const [elapsedPreviewSeconds, setElapsedPreviewSeconds] = useState(0);
+  const [progressDrafts, setProgressDrafts] = useState<Record<string, number>>({});
   const runningRef = useRef<{ itemId: string | null; startedAtMs: number | null }>({ itemId: null, startedAtMs: null });
 
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
@@ -90,6 +91,22 @@ export function FocusTab({
   const visibleItems = hyperFocusItem ? [hyperFocusItem] : activeItems;
   const openTaskCount = activeItems.filter((item) => item.targetType === "task").length;
   const openSubtaskCount = activeItems.filter((item) => item.targetType === "subtask").length;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const focusReportItems = useMemo(
+    () =>
+      focusItems
+        .filter((item) => !item.deletedAt)
+        .filter((item) => (item.updatedAt || item.addedAt).slice(0, 10) === todayKey)
+        .filter((item) => (item.focusTimeSpentSeconds ?? 0) > 0 || (item.manualProgressPercent ?? 0) > 0),
+    [focusItems, todayKey],
+  );
+  const focusReportSeconds = focusReportItems.reduce((sum, item) => sum + (item.focusTimeSpentSeconds ?? 0), 0);
+  const focusReportAverageProgress = focusReportItems.length
+    ? Math.round(focusReportItems.reduce((sum, item) => sum + (item.manualProgressPercent ?? 0), 0) / focusReportItems.length)
+    : 0;
+  const topFocusReportItems = [...focusReportItems]
+    .sort((a, b) => (b.focusTimeSpentSeconds ?? 0) - (a.focusTimeSpentSeconds ?? 0))
+    .slice(0, 3);
 
   useEffect(() => {
     runningRef.current = { itemId: runningItemId, startedAtMs: runningStartedAtMs };
@@ -154,6 +171,16 @@ export function FocusTab({
     setRunningStartedAtMs(Date.now());
   };
 
+  const commitProgressDraft = (itemId: string, fallback: number) => {
+    const nextProgress = progressDrafts[itemId] ?? fallback;
+    void onUpdateFocusProgress(itemId, nextProgress);
+    setProgressDrafts((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
+  };
+
   const renderFocusCard = (item: FocusItem, index: number) => {
     const task = taskById.get(item.taskId);
     const subtask = item.subtaskId ? subtaskById.get(item.subtaskId) : undefined;
@@ -161,7 +188,8 @@ export function FocusTab({
     const title = getItemTitle(item, task, subtask);
     const parentTitle = isSubtask ? task?.title ?? item.parentTitleSnapshot : null;
     const taskProgress = task ? getTaskProgress(task, subtasks) : null;
-    const manualProgress = Math.max(0, Math.min(100, item.manualProgressPercent ?? 0));
+    const savedManualProgress = Math.max(0, Math.min(100, item.manualProgressPercent ?? 0));
+    const manualProgress = progressDrafts[item.id] ?? savedManualProgress;
     const spentSeconds = (item.focusTimeSpentSeconds ?? 0) + (runningItemId === item.id ? elapsedPreviewSeconds : 0);
     const childSubtasks = !isSubtask && task
       ? subtasks
@@ -204,7 +232,14 @@ export function FocusTab({
             value={manualProgress}
             className="mt-2 w-full accent-emerald-500"
             disabled={isSaving}
-            onChange={(event) => void onUpdateFocusProgress(item.id, Number(event.currentTarget.value))}
+            onChange={(event) => setProgressDrafts((current) => ({ ...current, [item.id]: Number(event.currentTarget.value) }))}
+            onPointerUp={() => commitProgressDraft(item.id, savedManualProgress)}
+            onBlur={() => commitProgressDraft(item.id, savedManualProgress)}
+            onKeyUp={(event) => {
+              if (event.key === "Enter" || event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                commitProgressDraft(item.id, savedManualProgress);
+              }
+            }}
           />
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
             <div className="h-full rounded-full bg-gradient-to-l from-emerald-400 to-cyan-400" style={{ width: `${manualProgress}%` }} />
@@ -335,6 +370,52 @@ export function FocusTab({
           </div>
         </div>
       </section>
+
+      {!hyperFocusItem ? (
+        <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-emerald-100 sm:p-5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div>
+              <p className="text-xs font-black text-emerald-700">דוח פוקוס יומי</p>
+              <h3 className="mt-1 text-xl font-black text-slate-950">מה באמת התקדם היום</h3>
+              <p className="mt-1 text-sm font-bold text-slate-500">
+                זמן העבודה והאחוזים כאן הם שכבת פוקוס נפרדת. הם לא מסמנים משימה כבוצעה.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-2xl bg-emerald-50 px-3 py-3 ring-1 ring-emerald-100">
+                <p className="text-[11px] font-black text-emerald-700">זמן</p>
+                <p className="mt-1 text-lg font-black text-emerald-950">{formatSpent(focusReportSeconds)}</p>
+              </div>
+              <div className="rounded-2xl bg-cyan-50 px-3 py-3 ring-1 ring-cyan-100">
+                <p className="text-[11px] font-black text-cyan-700">פריטים</p>
+                <p className="mt-1 text-lg font-black text-cyan-950">{focusReportItems.length}</p>
+              </div>
+              <div className="rounded-2xl bg-sky-50 px-3 py-3 ring-1 ring-sky-100">
+                <p className="text-[11px] font-black text-sky-700">ממוצע</p>
+                <p className="mt-1 text-lg font-black text-sky-950">{focusReportAverageProgress}%</p>
+              </div>
+            </div>
+          </div>
+          {topFocusReportItems.length > 0 ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {topFocusReportItems.map((item) => {
+                const task = taskById.get(item.taskId);
+                const subtask = item.subtaskId ? subtaskById.get(item.subtaskId) : undefined;
+                return (
+                  <div key={item.id} className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+                    <p className="mobile-clamp-2 text-xs font-black text-slate-800">
+                      <LinkifiedText text={getItemTitle(item, task, subtask)} />
+                    </p>
+                    <p className="mt-1 text-[11px] font-bold text-slate-500">
+                      {formatSpent(item.focusTimeSpentSeconds ?? 0)} · {item.manualProgressPercent ?? 0}%
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {!hyperFocusItem ? (
         <section className="grid grid-cols-3 gap-2 sm:grid-cols-[repeat(4,minmax(0,1fr))]">
