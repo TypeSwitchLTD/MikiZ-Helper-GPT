@@ -18,6 +18,12 @@ export interface BuildMorningBriefingInput {
 // Future morning sources to wire later: Google Calendar, inbox/WhatsApp/LinkedIn,
 // finance/open invoices, people waiting for replies, and project bottlenecks.
 
+const MORNING_TOP_TASK_LIMIT = 3;
+const MORNING_BACKLOG_LIMIT = 2;
+const MORNING_REMINDER_LIMIT = 3;
+const MAX_SPOKEN_WORDS = 12;
+const MAX_BRIEFING_CHARS = 1300;
+
 export interface BriefingTaskLine {
   id: string;
   title: string;
@@ -99,6 +105,12 @@ function seededIndex(dateISO: string, length: number): number {
   return seed % length;
 }
 
+function compactText(value: string, maxWords = MAX_SPOKEN_WORDS): string {
+  const words = value.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  if (words.length <= maxWords) return words.join(' ');
+  return `${words.slice(0, maxWords).join(' ')}...`;
+}
+
 export function pickMorningTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, limit = 3): BriefingTaskLine[] {
   const priorityWeight: Record<Task['priority'], number> = { high: 3, medium: 2, low: 1 };
   const effortWeight: Record<Task['effort'], number> = { quick: 2, medium: 1, deep: 0 };
@@ -142,7 +154,7 @@ function cleanTaskTitle(title: string): string {
 }
 
 function getTaskLine(task: BriefingTaskLine, index: number): string {
-  const title = cleanTaskTitle(task.title);
+  const title = compactText(cleanTaskTitle(task.title), 14);
   return `${index + 1}. ${title}.`;
 }
 
@@ -175,13 +187,13 @@ function isVisibleTask(task: Task): boolean {
   return !task.deletedAt && task.statusOverride !== 'cancelled' && !task.completedAt && !task.cancelledAt;
 }
 
-function getBacklogTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, limit = 5): BriefingTaskLine[] {
+function getBacklogTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, limit = MORNING_BACKLOG_LIMIT): BriefingTaskLine[] {
   const priorityWeight: Record<Task['priority'], number> = { high: 3, medium: 2, low: 1 };
   const groupWeight: Record<string, number> = { tomorrow: 12, this_week: 8, waiting: 4, later: 1 };
 
   return tasks
     .filter(isVisibleTask)
-    .filter((task) => task.bucket === 'backlog' || (task.date != null && task.date > todayISO))
+    .filter((task) => task.bucket === 'backlog')
     .map((task) => {
       const taskSubtasks = getSubtasksForTask(task.id, subtasks);
       const progress = getTaskProgress(task, taskSubtasks);
@@ -214,6 +226,17 @@ function getBacklogTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, l
     }));
 }
 
+function getOpenBacklogCount(tasks: Task[], subtasks: Subtask[]): number {
+  return tasks
+    .filter(isVisibleTask)
+    .filter((task) => task.bucket === 'backlog')
+    .filter((task) => {
+      const progress = getTaskProgress(task, getSubtasksForTask(task.id, subtasks));
+      return progress.status !== 'done' && progress.status !== 'cancelled';
+    })
+    .length;
+}
+
 function getReminderDayPart(remindAt: string): string {
   const raw = remindAt.includes('T') ? remindAt.split('T')[1]?.slice(0, 5) : '';
   const hour = raw ? Number(raw.slice(0, 2)) : new Date(remindAt).getHours();
@@ -237,6 +260,27 @@ function getTodayReminderLines(input: BuildMorningBriefingInput): string[] {
       const note = reminder.note?.trim();
       return `${index + 1}. ${prefix}${dayPart ? `${dayPart} - ` : ''}${reminder.title.trim()}${note ? `: ${note}` : ''}.`;
     });
+}
+
+function getTodayReminderBriefLines(input: BuildMorningBriefingInput): string[] {
+  const reminders = (input.reminders ?? [])
+    .filter((reminder) => reminder.status === 'pending')
+    .filter((reminder) => reminder.remindAt.slice(0, 10) <= input.todayISO)
+    .sort((a, b) => a.remindAt.localeCompare(b.remindAt));
+
+  const lines = reminders.slice(0, MORNING_REMINDER_LIMIT).map((reminder, index) => {
+    const dayPart = getReminderDayPart(reminder.remindAt);
+    const reminderDate = reminder.remindAt.slice(0, 10);
+    const prefix = reminderDate < input.todayISO ? 'נגררת - ' : '';
+    const noteHint = reminder.note?.trim() ? ' יש הערה מצורפת.' : '';
+    return `${index + 1}. ${prefix}${dayPart ? `${dayPart} - ` : ''}${compactText(reminder.title.trim(), 10)}.${noteHint}`;
+  });
+
+  const hiddenCount = reminders.length - lines.length;
+  if (hiddenCount > 0) {
+    lines.push(`ועוד ${hiddenCount} תזכורות, לא מקריא עכשיו.`);
+  }
+  return lines;
 }
 
 function getHolidayReminderLines(weather: WeatherBrief | null | undefined): string[] {
@@ -291,6 +335,12 @@ function getReminderConclusion(reminderCount: number, holidayCount: number): str
   return null;
 }
 
+function clampBriefingText(text: string): string {
+  if (text.length <= MAX_BRIEFING_CHARS) return text;
+  const trimmed = text.slice(0, MAX_BRIEFING_CHARS).replace(/\s+\S*$/, '').trim();
+  return `${trimmed}\nזה מספיק לבוקר. השאר נשאר במערכת.`;
+}
+
 function getClosing(todayISO: string, settings: AppSettings | null): string {
   const customClosing = settings?.morningBriefing?.closingLine?.trim();
   if (customClosing) return customClosing;
@@ -334,9 +384,10 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
     .filter(isVisibleTask)
     .filter((task) => task.bucket === 'today' && task.date === input.todayISO)
     .length;
-  const topTasks = pickMorningTasks(input.tasks.filter(isVisibleTask), input.subtasks, input.todayISO, 6);
-  const backlogTasks = getBacklogTasks(input.tasks, input.subtasks, input.todayISO, 5);
-  const todayReminderLines = getTodayReminderLines(input);
+  const topTasks = pickMorningTasks(input.tasks.filter(isVisibleTask), input.subtasks, input.todayISO, MORNING_TOP_TASK_LIMIT);
+  const backlogTasks = getBacklogTasks(input.tasks, input.subtasks, input.todayISO, MORNING_BACKLOG_LIMIT);
+  const openBacklogCount = getOpenBacklogCount(input.tasks, input.subtasks);
+  const todayReminderLines = getTodayReminderBriefLines(input);
   const holidayReminderLines = getHolidayReminderLines(input.weather);
   const reminderLines = [...holidayReminderLines, ...todayReminderLines];
   const importantNote = getImportantTaskNote(topTasks, visibleTodayCount);
@@ -345,7 +396,11 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
     ? topTasks.map((task, index) => getTaskLine(task, index))
     : ['אין משימות להיום.'];
   const backlogLines = backlogTasks.length
-    ? backlogTasks.map((task, index) => getTaskLine(task, index))
+    ? [
+        `יש ${openBacklogCount} פריטי Backlog פתוחים.`,
+        ...backlogTasks.map((task, index) => getTaskLine(task, index)),
+        ...(openBacklogCount > backlogTasks.length ? [`ועוד ${openBacklogCount - backlogTasks.length} בבקלוג, לא מקריא עכשיו.`] : []),
+      ]
     : ['אין משימות Backlog פתוחות להצגה.'];
 
   const sections = [
@@ -360,10 +415,10 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
     morning?.includeClosing === false ? '' : getClosing(input.todayISO, input.settings),
   ];
 
-  return sections
+  return clampBriefingText(sections
     .filter((section) => section.trim().length > 0)
     .map((section) => section.trim())
-    .join('\n');
+    .join('\n'));
 }
 
 export function buildMorningBriefingMarkdown(input: BuildMorningBriefingInput): string {

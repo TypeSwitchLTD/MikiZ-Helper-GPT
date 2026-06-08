@@ -33,6 +33,8 @@ export interface Task {
   movedToDate?: string | null;
   focusOrder?: number | null;
   focusUpdatedAt?: string | null;
+  customerId?: string | null;
+  orderId?: string | null;
   source: 'manual' | 'recurring' | 'imported' | 'interruption' | 'seed';
   createdAt: string;
   updatedAt: string;

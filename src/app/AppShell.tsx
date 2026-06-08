@@ -16,6 +16,7 @@ import { ReadyCheckModal } from "../features/morning/ReadyCheckModal";
 import { FocusTab } from "../features/focus/FocusTab";
 import { FocusTimerModal } from "../features/focus/FocusTimerModal";
 import { ProcessesTab } from "../features/processes/ProcessesTab";
+import { SalesOpsTab } from "../features/sales/SalesOpsTab";
 import { useMorningBriefing } from "../features/morning/useMorningBriefing";
 import { getTaskProgress } from "../domain/tasks/taskProgress";
 import { getSubtasksForTask } from "../domain/tasks/taskSelectors";
@@ -26,7 +27,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.20";
+const APP_VERSION = "0.8.22";
 const FOCUS_TIMER_STATE_KEY = "mission-control-focus-timer-state";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
@@ -318,6 +319,14 @@ function NavIcon({ tabId, className }: { tabId: string; className?: string }) {
           <path d="M6 15h12v5H6z" />
           <path d="M12 9v6" />
           <path d="M8 12h8" />
+        </svg>
+      );
+    case "sales":
+      return (
+        <svg {...SVG_BASE} className={cls}>
+          <path d="M3 7l9-4 9 4-9 4-9-4z" />
+          <path d="M3 7v10l9 4 9-4V7" />
+          <path d="M12 11v10" />
         </svg>
       );
     case "workouts":
@@ -1077,6 +1086,31 @@ export function AppShell() {
               setFocusedTaskId(taskId);
               setSearchQuery("");
             }}
+          />
+        );
+      case "sales":
+        return (
+          <SalesOpsTab
+            customers={data.customers}
+            products={data.products}
+            suppliers={data.suppliers}
+            orders={data.orders}
+            orderItems={data.orderItems}
+            productionBatches={data.productionBatches}
+            allocations={data.allocations}
+            tasks={data.tasks}
+            todayISO={data.todayISO}
+            isSaving={data.isSaving}
+            onAddCustomer={data.addCustomer}
+            onEditCustomer={data.editCustomer}
+            onAddProduct={data.addProduct}
+            onAddSupplier={data.addSupplier}
+            onAddSalesOrder={data.addSalesOrder}
+            onEditSalesOrder={data.editSalesOrder}
+            onAddOrderItem={data.addOrderItem}
+            onAddProductionBatch={data.addProductionBatch}
+            onAddAllocation={data.addAllocation}
+            onCreateTask={data.createTask}
           />
         );
       case "social":

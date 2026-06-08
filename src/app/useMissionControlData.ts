@@ -14,6 +14,18 @@ import type { Reminder } from '../domain/reminders/reminderTypes';
 import { cancelReminder, createReminder, markReminderSent, snoozeReminder, type CreateReminderInput } from '../domain/reminders/reminderMutations';
 import { createHabit, updateHabit, deleteHabit, reorderHabits, incrementHabitCount, type CreateHabitInput } from '../domain/habits/habitMutations';
 import type { DailyHabit, DailyHabitLog } from '../domain/habits/habitTypes';
+import {
+  createAllocation,
+  createCustomer,
+  createOrderItem,
+  createProduct,
+  createProductionBatch,
+  createSalesOrder,
+  createSupplier,
+  updateCustomer,
+  updateSalesOrder,
+} from '../domain/sales/salesMutations';
+import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../domain/sales/salesTypes';
 import { updateAppSettings, type SettingsPatch } from '../domain/settings/settingsService';
 import { createDefaultSettings } from '../domain/settings/defaultSettings';
 import type { AppSettings } from '../domain/settings/settingsTypes';
@@ -43,7 +55,7 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.20-reliable-daily-work';
+const CLIENT_APP_VERSION = '0.8.22-sales-ops-foundation';
 const CLOUD_SYNC_DEBOUNCE_MS = 4000;
 
 interface MissionControlData {
@@ -58,6 +70,13 @@ interface MissionControlData {
   settings: AppSettings | null;
   habits: DailyHabit[];
   habitLogs: DailyHabitLog[];
+  customers: Customer[];
+  products: Product[];
+  suppliers: Supplier[];
+  orders: SalesOrder[];
+  orderItems: OrderItem[];
+  productionBatches: ProductionBatch[];
+  allocations: Allocation[];
 }
 
 const emptyData: MissionControlData = {
@@ -72,6 +91,13 @@ const emptyData: MissionControlData = {
   settings: null,
   habits: [],
   habitLogs: [],
+  customers: [],
+  products: [],
+  suppliers: [],
+  orders: [],
+  orderItems: [],
+  productionBatches: [],
+  allocations: [],
 };
 
 function getCloudTokenFromUrl(): string {
@@ -160,6 +186,13 @@ function buildCloudSyncPayload(localData: MissionControlData): CloudSyncPayload 
     focusItems: localData.focusItems,
     habits: localData.habits,
     habitLogs: localData.habitLogs,
+    customers: localData.customers,
+    products: localData.products,
+    suppliers: localData.suppliers,
+    orders: localData.orders,
+    orderItems: localData.orderItems,
+    productionBatches: localData.productionBatches,
+    allocations: localData.allocations,
     settings: localData.settings,
   };
 }
@@ -932,6 +965,130 @@ export function useMissionControlData() {
     [reloadDataAndPushCloud],
   );
 
+  const addCustomer = useCallback(
+    async (input: Parameters<typeof createCustomer>[0]) => {
+      try {
+        setIsSaving(true);
+        const customer = await createCustomer(input);
+        await reloadDataAndPushCloud();
+        return customer;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const editCustomer = useCallback(
+    async (customerId: string, patch: Partial<Customer>) => {
+      try {
+        setIsSaving(true);
+        await updateCustomer(customerId, patch);
+        await reloadDataAndPushCloud();
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addProduct = useCallback(
+    async (input: Parameters<typeof createProduct>[0]) => {
+      try {
+        setIsSaving(true);
+        const product = await createProduct(input);
+        await reloadDataAndPushCloud();
+        return product;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addSupplier = useCallback(
+    async (input: Parameters<typeof createSupplier>[0]) => {
+      try {
+        setIsSaving(true);
+        const supplier = await createSupplier(input);
+        await reloadDataAndPushCloud();
+        return supplier;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addSalesOrder = useCallback(
+    async (input: Parameters<typeof createSalesOrder>[0]) => {
+      try {
+        setIsSaving(true);
+        const order = await createSalesOrder(input);
+        await reloadDataAndPushCloud();
+        return order;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const editSalesOrder = useCallback(
+    async (orderId: string, patch: Partial<SalesOrder>) => {
+      try {
+        setIsSaving(true);
+        await updateSalesOrder(orderId, patch);
+        await reloadDataAndPushCloud();
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addOrderItem = useCallback(
+    async (input: Parameters<typeof createOrderItem>[0]) => {
+      try {
+        setIsSaving(true);
+        const item = await createOrderItem(input);
+        await reloadDataAndPushCloud();
+        return item;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addProductionBatch = useCallback(
+    async (input: Parameters<typeof createProductionBatch>[0]) => {
+      try {
+        setIsSaving(true);
+        const batch = await createProductionBatch(input);
+        await reloadDataAndPushCloud();
+        return batch;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addAllocation = useCallback(
+    async (input: Parameters<typeof createAllocation>[0]) => {
+      try {
+        setIsSaving(true);
+        const allocation = await createAllocation(input);
+        await reloadDataAndPushCloud();
+        return allocation;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
 
 
   const saveDailyPlan = useCallback(
@@ -1026,7 +1183,13 @@ export function useMissionControlData() {
     const quickWinTasks = getQuickWinTasks(data.tasks).filter(
       (task) => getTaskProgress(task, data.subtasks).status !== 'done',
     );
-    const backlogTasks = data.tasks.filter((task) => task.bucket === 'backlog');
+    const backlogTasks = data.tasks.filter(
+      (task) =>
+        task.bucket === 'backlog' &&
+        !task.deletedAt &&
+        task.statusOverride !== 'cancelled' &&
+        getTaskProgress(task, data.subtasks).status !== 'done',
+    );
     const doneTasks = data.tasks.filter((task) => getTaskProgress(task, data.subtasks).status === 'done');
 
     return {
@@ -1094,5 +1257,14 @@ export function useMissionControlData() {
     completeFocusDeckItem,
     updateFocusDeckProgress,
     addFocusDeckTime,
+    addCustomer,
+    editCustomer,
+    addProduct,
+    addSupplier,
+    addSalesOrder,
+    editSalesOrder,
+    addOrderItem,
+    addProductionBatch,
+    addAllocation,
   };
 }

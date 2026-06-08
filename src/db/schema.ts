@@ -7,10 +7,11 @@ import type { Reminder } from '../domain/reminders/reminderTypes';
 import type { AppSettings } from '../domain/settings/settingsTypes';
 import type { Subtask, Task } from '../domain/tasks/taskTypes';
 import type { DailyHabit, DailyHabitLog } from '../domain/habits/habitTypes';
+import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../domain/sales/salesTypes';
 
 export const DATABASE_NAME = 'mission-control-local';
-export const DATABASE_VERSION = 7;
-export const APP_VERSION = '0.8.20';
+export const DATABASE_VERSION = 8;
+export const APP_VERSION = '0.8.22';
 
 export interface BackupSnapshot {
   id: string;
@@ -28,6 +29,13 @@ export interface BackupSnapshot {
     focusItems?: FocusItem[];
     habits?: DailyHabit[];
     habitLogs?: DailyHabitLog[];
+    customers?: Customer[];
+    products?: Product[];
+    suppliers?: Supplier[];
+    orders?: SalesOrder[];
+    orderItems?: OrderItem[];
+    productionBatches?: ProductionBatch[];
+    allocations?: Allocation[];
     settings: AppSettings;
   };
 }

@@ -7,6 +7,7 @@ import type { Reminder } from '../reminders/reminderTypes';
 import type { AppSettings } from '../settings/settingsTypes';
 import type { Subtask, Task } from '../tasks/taskTypes';
 import type { DailyHabit, DailyHabitLog } from '../habits/habitTypes';
+import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../sales/salesTypes';
 
 export interface CloudSyncPayload {
   schemaVersion: '0.6.0';
@@ -22,6 +23,13 @@ export interface CloudSyncPayload {
   focusItems?: FocusItem[];
   habits?: DailyHabit[];
   habitLogs?: DailyHabitLog[];
+  customers?: Customer[];
+  products?: Product[];
+  suppliers?: Supplier[];
+  orders?: SalesOrder[];
+  orderItems?: OrderItem[];
+  productionBatches?: ProductionBatch[];
+  allocations?: Allocation[];
   settings: AppSettings;
 }
 

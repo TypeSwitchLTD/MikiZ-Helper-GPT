@@ -8,6 +8,7 @@ import type { Reminder } from '../domain/reminders/reminderTypes';
 import type { AppSettings } from '../domain/settings/settingsTypes';
 import type { Subtask, Task } from '../domain/tasks/taskTypes';
 import type { DailyHabit, DailyHabitLog } from '../domain/habits/habitTypes';
+import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../domain/sales/salesTypes';
 import { createDefaultSettings } from '../domain/settings/defaultSettings';
 import { createSeedData } from './seed';
 import { APP_VERSION, DATABASE_NAME, type BackupSnapshot } from './schema';
@@ -29,6 +30,13 @@ export class MissionControlDatabase extends Dexie {
   habits!: Table<DailyHabit, string>;
   habitLogs!: Table<DailyHabitLog, string>;
   focusItems!: Table<FocusItem, string>;
+  customers!: Table<Customer, string>;
+  products!: Table<Product, string>;
+  suppliers!: Table<Supplier, string>;
+  orders!: Table<SalesOrder, string>;
+  orderItems!: Table<OrderItem, string>;
+  productionBatches!: Table<ProductionBatch, string>;
+  allocations!: Table<Allocation, string>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -167,6 +175,37 @@ export class MissionControlDatabase extends Dexie {
         });
       } catch { /* never block db open */ }
     });
+
+    this.version(8).stores({
+      tasks: 'id, bucket, date, projectId, domainId, originalDate, movedToDate, focusOrder, customerId, orderId, createdAt, updatedAt',
+      subtasks: 'id, taskId, status, sortOrder, createdAt, updatedAt',
+      dailyPlans: 'id, date, createdAt, updatedAt',
+      recurringDefinitions: 'id, isActive, frequency, projectId, domainId, createdAt, updatedAt',
+      reports: 'id, date, generatedAt, createdAt, updatedAt',
+      logs: 'id, timestamp, type, entityType, entityId',
+      reminders: 'id, remindAt, taskId, subtaskId, status, createdAt, updatedAt',
+      settings: 'id',
+      snapshots: 'id, createdAt, reason',
+      habits: 'id, active, order, createdAt, updatedAt',
+      habitLogs: 'id, habitId, date, [habitId+date], createdAt',
+      focusItems: 'id, targetType, taskId, subtaskId, sortOrder, addedAt, updatedAt, deletedAt, completedAt',
+      customers: 'id, status, country, createdAt, updatedAt, deletedAt',
+      products: 'id, active, createdAt, updatedAt, deletedAt',
+      suppliers: 'id, type, country, createdAt, updatedAt, deletedAt',
+      orders: 'id, customerId, status, source, expectedCloseDate, dueDate, createdAt, updatedAt, deletedAt',
+      orderItems: 'id, orderId, productId, color, createdAt, updatedAt, deletedAt',
+      productionBatches: 'id, productId, color, supplierId, status, expectedReadyDate, createdAt, updatedAt, deletedAt',
+      allocations: 'id, orderItemId, productionBatchId, createdAt, updatedAt, deletedAt',
+    }).upgrade(async (tx) => {
+      try {
+        await tx.table('logs').add({
+          id: createId('log'), timestamp: nowISO(), type: 'note_added',
+          entityType: 'system', entityId: null,
+          message: 'Database migrated to 0.8.22 - added customers, orders, inventory and allocations',
+          metadata: { appVersion: APP_VERSION, migration: 'v8-sales-ops' },
+        });
+      } catch { /* never block db open */ }
+    });
   }
 }
 
@@ -190,7 +229,7 @@ async function seedDatabaseIfNeeded(): Promise<void> {
 
   await db.transaction(
     'rw',
-    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.focusItems],
+    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.focusItems, db.customers, db.products, db.suppliers, db.orders, db.orderItems, db.productionBatches, db.allocations],
     async () => {
       await db.settings.put(settings);
 
@@ -227,7 +266,7 @@ async function seedDatabaseIfNeeded(): Promise<void> {
         const snapshots = await db.snapshots.toArray();
         const hasCurrentVersionSnapshot = snapshots.some((snapshot) => snapshot.reason === 'app_update' && snapshot.appVersion === APP_VERSION);
         if (!hasCurrentVersionSnapshot) {
-          const [tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, habits, habitLogs, focusItems] = await Promise.all([
+          const [tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, habits, habitLogs, focusItems, customers, products, suppliers, orders, orderItems, productionBatches, allocations] = await Promise.all([
             db.tasks.toArray(),
             db.subtasks.toArray(),
             db.dailyPlans.toArray(),
@@ -238,13 +277,20 @@ async function seedDatabaseIfNeeded(): Promise<void> {
             db.habits.toArray(),
             db.habitLogs.toArray(),
             db.focusItems.toArray(),
+            db.customers.toArray(),
+            db.products.toArray(),
+            db.suppliers.toArray(),
+            db.orders.toArray(),
+            db.orderItems.toArray(),
+            db.productionBatches.toArray(),
+            db.allocations.toArray(),
           ]);
           await db.snapshots.add({
             id: createId('snapshot'),
             createdAt: timestamp,
             reason: 'app_update',
             appVersion: APP_VERSION,
-            data: { tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, habits, habitLogs, focusItems, settings },
+            data: { tasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, habits, habitLogs, focusItems, customers, products, suppliers, orders, orderItems, productionBatches, allocations, settings },
           });
         }
       }
@@ -275,6 +321,13 @@ async function seedDatabaseIfNeeded(): Promise<void> {
             habits: [],
             habitLogs: [],
             focusItems: [],
+            customers: [],
+            products: [],
+            suppliers: [],
+            orders: [],
+            orderItems: [],
+            productionBatches: [],
+            allocations: [],
             settings,
           },
         });
@@ -288,7 +341,7 @@ interface GetAllLocalDataOptions {
 }
 
 export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
-  const [rawTasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs, focusItems] = await Promise.all([
+  const [rawTasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs, focusItems, customers, products, suppliers, orders, orderItems, productionBatches, allocations] = await Promise.all([
     db.tasks.orderBy('createdAt').toArray(),
     db.subtasks.orderBy('sortOrder').toArray(),
     db.dailyPlans.orderBy('date').toArray(),
@@ -300,6 +353,13 @@ export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
     db.habits.orderBy('order').toArray(),
     db.habitLogs.orderBy('date').toArray(),
     db.focusItems.orderBy('sortOrder').toArray(),
+    db.customers.orderBy('createdAt').toArray(),
+    db.products.orderBy('createdAt').toArray(),
+    db.suppliers.orderBy('createdAt').toArray(),
+    db.orders.orderBy('createdAt').toArray(),
+    db.orderItems.orderBy('createdAt').toArray(),
+    db.productionBatches.orderBy('createdAt').toArray(),
+    db.allocations.orderBy('createdAt').toArray(),
   ]);
 
   const allTasks = rawTasks.map(normalizeTask);
@@ -318,6 +378,13 @@ export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
     logs,
     reminders,
     focusItems: options.includeDeleted ? focusItems : focusItems.filter((item) => !item.deletedAt),
+    customers: options.includeDeleted ? customers : customers.filter((item) => !item.deletedAt),
+    products: options.includeDeleted ? products : products.filter((item) => !item.deletedAt),
+    suppliers: options.includeDeleted ? suppliers : suppliers.filter((item) => !item.deletedAt),
+    orders: options.includeDeleted ? orders : orders.filter((item) => !item.deletedAt),
+    orderItems: options.includeDeleted ? orderItems : orderItems.filter((item) => !item.deletedAt),
+    productionBatches: options.includeDeleted ? productionBatches : productionBatches.filter((item) => !item.deletedAt),
+    allocations: options.includeDeleted ? allocations : allocations.filter((item) => !item.deletedAt),
     settings: settings ?? createDefaultSettings(),
     habits,
     habitLogs,
@@ -340,11 +407,27 @@ interface DailyStateImportPayload {
   focusItems?: FocusItem[];
   habits?: DailyHabit[];
   habitLogs?: DailyHabitLog[];
+  customers?: Customer[];
+  products?: Product[];
+  suppliers?: Supplier[];
+  orders?: SalesOrder[];
+  orderItems?: OrderItem[];
+  productionBatches?: ProductionBatch[];
+  allocations?: Allocation[];
   settings?: AppSettings | null;
 }
 
 function asArray<T>(value: T[] | undefined): T[] {
   return Array.isArray(value) ? value : [];
+}
+
+function mergeByUpdatedAt<T extends { id: string; updatedAt?: string; deletedAt?: string | null }>(incoming: T, existing: T | undefined): T {
+  if (!existing) return incoming;
+  if (existing.deletedAt && !incoming.deletedAt) return existing;
+  if (incoming.deletedAt && !existing.deletedAt) return incoming;
+  const existingTime = Date.parse(existing.updatedAt ?? '') || 0;
+  const incomingTime = Date.parse(incoming.updatedAt ?? '') || 0;
+  return existingTime > incomingTime ? existing : incoming;
 }
 
 /** Ensure required array/string fields exist on every task coming from cloud/import */
@@ -379,15 +462,23 @@ export async function importDailyStatePayload(
   const focusItems = asArray(payload.focusItems);
   const habits = asArray(payload.habits);
   const habitLogs = asArray(payload.habitLogs);
+  const customers = asArray(payload.customers);
+  const products = asArray(payload.products);
+  const suppliers = asArray(payload.suppliers);
+  const orders = asArray(payload.orders);
+  const orderItems = asArray(payload.orderItems);
+  const productionBatches = asArray(payload.productionBatches);
+  const allocations = asArray(payload.allocations);
   const settings = payload.settings ?? undefined;
+  const hasSalesPayload = customers.length > 0 || products.length > 0 || suppliers.length > 0 || orders.length > 0 || orderItems.length > 0 || productionBatches.length > 0 || allocations.length > 0;
 
-  if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0 && focusItems.length === 0 && habits.length === 0 && habitLogs.length === 0 && !settings) {
+  if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0 && focusItems.length === 0 && habits.length === 0 && habitLogs.length === 0 && !hasSalesPayload && !settings) {
     throw new Error('Daily State JSON לא מכיל משימות / תתי־משימות / תוכניות יום לייבוא.');
   }
 
   await db.transaction(
     'rw',
-    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.habits, db.habitLogs, db.focusItems],
+    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.habits, db.habitLogs, db.focusItems, db.customers, db.products, db.suppliers, db.orders, db.orderItems, db.productionBatches, db.allocations],
     async () => {
       const beforeImport = await getAllLocalData();
       await db.snapshots.add({
@@ -463,6 +554,34 @@ export async function importDailyStatePayload(
           return item;
         });
         await db.focusItems.bulkPut(mergedFocusItems);
+      }
+      if (customers.length) {
+        const existing = await db.customers.bulkGet(customers.map((item) => item.id));
+        await db.customers.bulkPut(customers.map((item, index) => mergeByUpdatedAt(item, existing[index])));
+      }
+      if (products.length) {
+        const existing = await db.products.bulkGet(products.map((item) => item.id));
+        await db.products.bulkPut(products.map((item, index) => mergeByUpdatedAt(item, existing[index])));
+      }
+      if (suppliers.length) {
+        const existing = await db.suppliers.bulkGet(suppliers.map((item) => item.id));
+        await db.suppliers.bulkPut(suppliers.map((item, index) => mergeByUpdatedAt(item, existing[index])));
+      }
+      if (orders.length) {
+        const existing = await db.orders.bulkGet(orders.map((item) => item.id));
+        await db.orders.bulkPut(orders.map((item, index) => mergeByUpdatedAt(item, existing[index])));
+      }
+      if (orderItems.length) {
+        const existing = await db.orderItems.bulkGet(orderItems.map((item) => item.id));
+        await db.orderItems.bulkPut(orderItems.map((item, index) => mergeByUpdatedAt(item, existing[index])));
+      }
+      if (productionBatches.length) {
+        const existing = await db.productionBatches.bulkGet(productionBatches.map((item) => item.id));
+        await db.productionBatches.bulkPut(productionBatches.map((item, index) => mergeByUpdatedAt(item, existing[index])));
+      }
+      if (allocations.length) {
+        const existing = await db.allocations.bulkGet(allocations.map((item) => item.id));
+        await db.allocations.bulkPut(allocations.map((item, index) => mergeByUpdatedAt(item, existing[index])));
       }
 
       await db.logs.add({

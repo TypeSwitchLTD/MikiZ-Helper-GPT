@@ -1,4 +1,4 @@
-export type AppTabId = "tasks" | "focus" | "processes" | "social" | "workouts" | "personal" | "reminders" | "settings";
+export type AppTabId = "tasks" | "focus" | "processes" | "sales" | "social" | "workouts" | "personal" | "reminders" | "settings";
 
 export interface AppTab {
   id: AppTabId;
@@ -23,6 +23,12 @@ export const appTabs: AppTab[] = [
     label: "תהליכים",
     mobileLabel: "תהליך",
     description: "משימות על ארוכות עם צעדים פתוחים, בוצעים והמשך עבודה.",
+  },
+  {
+    id: "sales",
+    label: "לקוחות והזמנות",
+    mobileLabel: "הזמנות",
+    description: "לקוחות אחרי פגישה, הזמנות, ביקוש, ייצור והקצאות ידניות",
   },
   {
     id: "social",

@@ -131,8 +131,8 @@ const BACKLOG_GROUP_META: Record<string, { label: string; dotColor: string; head
 };
 
 function getTaskGroup(task: Task, subtasks: Subtask[], todayISO: string): string {
-  if (task.bucket === 'today' || task.date === todayISO) return 'today';
   const progress = getTaskProgress(task, subtasks);
+  if (task.bucket === 'today' || (task.bucket !== 'backlog' && task.date === todayISO)) return 'today';
   if (progress.startedCount > 0 || progress.status === 'in_progress') return 'in_progress';
   if (task.isQuickWin) return 'quick';
   if (task.bucket === 'backlog' && task.backlogGroup) return task.backlogGroup;
