@@ -522,6 +522,19 @@ export function ReadOnlyTaskCard({
     setIsDetailsEditOpen(false);
   };
 
+  const handleMarkMorningImportant = async () => {
+    if (!onUpdateTaskDetails) return;
+    setActionError("");
+    const tags = Array.from(new Set([...(task.tags ?? []), "important", "morning-important"]));
+    await onUpdateTaskDetails(task.id, {
+      projectId: task.projectId,
+      domainId: task.domainId,
+      priority: "high",
+      effort: task.effort,
+      tags,
+    });
+  };
+
   const pendingSubtaskTitles = newSubtaskTitle
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -730,6 +743,34 @@ export function ReadOnlyTaskCard({
             <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-700 ring-1 ring-amber-100 sm:py-1">
               {priorityLabels[task.priority]}
             </span>
+            {onUpdateTaskDetails ? (
+              <button
+                type="button"
+                className={`rounded-full px-2 py-0.5 font-black ring-1 transition sm:py-1 ${task.priority === "high" && (task.tags ?? []).includes("morning-important") ? "bg-rose-600 text-white ring-rose-600" : "bg-rose-50 text-rose-700 ring-rose-100 hover:bg-rose-100"}`}
+                disabled={isSaving}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleMarkMorningImportant();
+                }}
+                title="סמן כדחוף לנאום הבוקר"
+              >
+                דחוף
+              </button>
+            ) : null}
+            {task.bucket !== "today" && onChangeTaskDate ? (
+              <button
+                type="button"
+                className="rounded-full bg-sky-50 px-2 py-0.5 font-black text-sky-800 ring-1 ring-sky-100 transition hover:bg-sky-100 sm:py-1"
+                disabled={isSaving}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleMoveToday();
+                }}
+                title="העבר להיום"
+              >
+                היום
+              </button>
+            ) : null}
             <span className="rounded-full bg-fuchsia-50 px-2 py-0.5 font-bold text-fuchsia-700 ring-1 ring-fuchsia-100 sm:py-1">
               {effortLabels[task.effort]}
             </span>

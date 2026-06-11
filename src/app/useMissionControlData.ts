@@ -55,7 +55,7 @@ import { getInProgressTasks, getQuickWinTasks, getTodayTasks } from '../domain/t
 import { getTodayISO, nowISO } from '../utils/dates';
 import { createId } from '../utils/ids';
 
-const CLIENT_APP_VERSION = '0.8.22-sales-ops-foundation';
+const CLIENT_APP_VERSION = '0.8.23-smarter-morning-priority';
 const CLOUD_SYNC_DEBOUNCE_MS = 4000;
 
 interface MissionControlData {

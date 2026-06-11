@@ -35,6 +35,9 @@ export interface BriefingTaskLine {
   effort: Task['effort'];
   movedCount: number;
   tags: string[];
+  bucket: Task['bucket'];
+  backlogGroup?: Task['backlogGroup'];
+  updatedAt?: string;
 }
 
 export interface DayPlanBlock {
@@ -111,39 +114,92 @@ function compactText(value: string, maxWords = MAX_SPOKEN_WORDS): string {
   return `${words.slice(0, maxWords).join(' ')}...`;
 }
 
-export function pickMorningTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, limit = 3): BriefingTaskLine[] {
-  const priorityWeight: Record<Task['priority'], number> = { high: 3, medium: 2, low: 1 };
-  const effortWeight: Record<Task['effort'], number> = { quick: 2, medium: 1, deep: 0 };
+function dayDiff(dateISO: string | null | undefined, todayISO: string): number | null {
+  if (!dateISO) return null;
+  const date = Date.parse(`${dateISO.slice(0, 10)}T12:00:00`);
+  const today = Date.parse(`${todayISO}T12:00:00`);
+  if (!Number.isFinite(date) || !Number.isFinite(today)) return null;
+  return Math.round((date - today) / 86_400_000);
+}
 
+function daysSince(dateTime: string | null | undefined, todayISO: string): number {
+  if (!dateTime) return 999;
+  const value = Date.parse(dateTime);
+  const today = Date.parse(`${todayISO}T23:59:59`);
+  if (!Number.isFinite(value) || !Number.isFinite(today)) return 999;
+  return Math.max(0, Math.floor((today - value) / 86_400_000));
+}
+
+function toBriefingTaskLine(task: Task, progress: ReturnType<typeof getTaskProgress>): BriefingTaskLine {
+  return {
+    id: task.id,
+    title: task.title,
+    projectId: task.projectId,
+    domainId: task.domainId,
+    status: progress.status,
+    percent: progress.percent,
+    priority: task.priority,
+    effort: task.effort,
+    movedCount: task.movedCount,
+    tags: task.tags,
+    bucket: task.bucket,
+    backlogGroup: task.backlogGroup,
+    updatedAt: task.updatedAt,
+  };
+}
+
+function scoreMorningTask(task: Task, progress: ReturnType<typeof getTaskProgress>, todayISO: string): number {
+  const priorityWeight: Record<Task['priority'], number> = { high: 85, medium: 45, low: 15 };
+  const effortWeight: Record<Task['effort'], number> = { quick: 12, medium: 6, deep: 0 };
+  const backlogWeight: Record<string, number> = { tomorrow: 35, this_week: 25, waiting: 10, later: -5 };
+  const diff = dayDiff(task.date, todayISO);
+  const updatedAge = daysSince(task.updatedAt, todayISO);
+  const createdAge = daysSince(task.createdAt, todayISO);
+  const tags = task.tags ?? [];
+  const important = tags.includes('morning-important') || tags.includes('important') || tags.includes('urgent') ? 90 : 0;
+  const focus = typeof task.focusOrder === 'number' ? Math.max(0, 40 - task.focusOrder / 100) : 0;
+  const dateScore =
+    diff === null
+      ? 0
+      : diff === 0
+        ? 60
+        : diff < 0
+          ? Math.max(-35, 25 - Math.abs(diff) * 8)
+          : diff === 1
+            ? 12
+            : -30;
+  const recencyScore = updatedAge <= 1 ? 35 : updatedAge <= 3 ? 22 : updatedAge <= 7 ? 8 : updatedAge >= 21 ? -35 : -8;
+  const createdScore = createdAge <= 2 ? 20 : createdAge >= 21 ? -15 : 0;
+  const progressScore = progress.status === 'in_progress' ? 45 : progress.startedCount > 0 ? 25 : 0;
+  const bucketScore =
+    task.bucket === 'today'
+      ? 25
+      : task.bucket === 'backlog'
+        ? backlogWeight[task.backlogGroup ?? 'later'] ?? -5
+        : -20;
+  const movedPenalty = Math.min(task.movedCount ?? 0, 8) * -7;
+  const stalePenalty = updatedAge >= 30 && task.priority !== 'high' && !important ? -45 : 0;
+
+  return important + priorityWeight[task.priority] + effortWeight[task.effort] + focus + dateScore + recencyScore + createdScore + progressScore + bucketScore + movedPenalty + stalePenalty;
+}
+
+export function pickMorningTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, limit = 3): BriefingTaskLine[] {
   return tasks
-    .filter((task) => task.statusOverride !== 'cancelled')
-    .filter((task) => task.bucket === 'today' && task.date === todayISO)
+    .filter(isVisibleTask)
+    .filter((task) => task.bucket === 'today' || task.bucket === 'backlog')
     .map((task) => {
       const taskSubtasks = getSubtasksForTask(task.id, subtasks);
       const progress = getTaskProgress(task, taskSubtasks);
-      return { task, progress };
+      return { task, progress, score: scoreMorningTask(task, progress, todayISO) };
     })
     .filter(({ progress }) => progress.status !== 'done' && progress.status !== 'cancelled')
     .sort((a, b) => {
-      const morningTagA = (a.task.tags ?? []).includes('morning-important') || (a.task.tags ?? []).includes('important') ? 30 : 0;
-      const morningTagB = (b.task.tags ?? []).includes('morning-important') || (b.task.tags ?? []).includes('important') ? 30 : 0;
-      const scoreA = morningTagA + priorityWeight[a.task.priority] * 12 + effortWeight[a.task.effort] + (a.progress.status === 'in_progress' ? 6 : 0) + Math.min(a.task.movedCount, 4) * 2;
-      const scoreB = morningTagB + priorityWeight[b.task.priority] * 12 + effortWeight[b.task.effort] + (b.progress.status === 'in_progress' ? 6 : 0) + Math.min(b.task.movedCount, 4) * 2;
-      return scoreB - scoreA || a.task.title.localeCompare(b.task.title);
+      const updatedB = Date.parse(b.task.updatedAt ?? '') || 0;
+      const updatedA = Date.parse(a.task.updatedAt ?? '') || 0;
+      return b.score - a.score || updatedB - updatedA || a.task.title.localeCompare(b.task.title);
     })
     .slice(0, limit)
-    .map(({ task, progress }) => ({
-      id: task.id,
-      title: task.title,
-      projectId: task.projectId,
-      domainId: task.domainId,
-      status: progress.status,
-      percent: progress.percent,
-      priority: task.priority,
-      effort: task.effort,
-      movedCount: task.movedCount,
-      tags: task.tags,
-    }));
+    .map(({ task, progress }) => toBriefingTaskLine(task, progress));
 }
 
 function cleanTaskTitle(title: string): string {
@@ -188,42 +244,22 @@ function isVisibleTask(task: Task): boolean {
 }
 
 function getBacklogTasks(tasks: Task[], subtasks: Subtask[], todayISO: string, limit = MORNING_BACKLOG_LIMIT): BriefingTaskLine[] {
-  const priorityWeight: Record<Task['priority'], number> = { high: 3, medium: 2, low: 1 };
-  const groupWeight: Record<string, number> = { tomorrow: 12, this_week: 8, waiting: 4, later: 1 };
-
   return tasks
     .filter(isVisibleTask)
     .filter((task) => task.bucket === 'backlog')
     .map((task) => {
       const taskSubtasks = getSubtasksForTask(task.id, subtasks);
       const progress = getTaskProgress(task, taskSubtasks);
-      return { task, progress };
+      return { task, progress, score: scoreMorningTask(task, progress, todayISO) };
     })
     .filter(({ progress }) => progress.status !== 'done' && progress.status !== 'cancelled')
     .sort((a, b) => {
-      const scoreA =
-        groupWeight[a.task.backlogGroup ?? 'later'] +
-        priorityWeight[a.task.priority] * 10 +
-        Math.min(a.task.movedCount, 4) * 2;
-      const scoreB =
-        groupWeight[b.task.backlogGroup ?? 'later'] +
-        priorityWeight[b.task.priority] * 10 +
-        Math.min(b.task.movedCount, 4) * 2;
-      return scoreB - scoreA || a.task.title.localeCompare(b.task.title);
+      const updatedB = Date.parse(b.task.updatedAt ?? '') || 0;
+      const updatedA = Date.parse(a.task.updatedAt ?? '') || 0;
+      return b.score - a.score || updatedB - updatedA || a.task.title.localeCompare(b.task.title);
     })
     .slice(0, limit)
-    .map(({ task, progress }) => ({
-      id: task.id,
-      title: task.title,
-      projectId: task.projectId,
-      domainId: task.domainId,
-      status: progress.status,
-      percent: progress.percent,
-      priority: task.priority,
-      effort: task.effort,
-      movedCount: task.movedCount,
-      tags: task.tags,
-    }));
+    .map(({ task, progress }) => toBriefingTaskLine(task, progress));
 }
 
 function getOpenBacklogCount(tasks: Task[], subtasks: Subtask[]): number {
@@ -385,7 +421,10 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
     .filter((task) => task.bucket === 'today' && task.date === input.todayISO)
     .length;
   const topTasks = pickMorningTasks(input.tasks.filter(isVisibleTask), input.subtasks, input.todayISO, MORNING_TOP_TASK_LIMIT);
-  const backlogTasks = getBacklogTasks(input.tasks, input.subtasks, input.todayISO, MORNING_BACKLOG_LIMIT);
+  const topTaskIds = new Set(topTasks.map((task) => task.id));
+  const backlogTasks = getBacklogTasks(input.tasks, input.subtasks, input.todayISO, MORNING_BACKLOG_LIMIT + topTasks.length)
+    .filter((task) => !topTaskIds.has(task.id))
+    .slice(0, MORNING_BACKLOG_LIMIT);
   const openBacklogCount = getOpenBacklogCount(input.tasks, input.subtasks);
   const todayReminderLines = getTodayReminderBriefLines(input);
   const holidayReminderLines = getHolidayReminderLines(input.weather);

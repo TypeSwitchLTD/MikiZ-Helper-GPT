@@ -27,7 +27,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.22";
+const APP_VERSION = "0.8.23";
 const FOCUS_TIMER_STATE_KEY = "mission-control-focus-timer-state";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────

@@ -96,7 +96,8 @@ function compareFocus(a: Task, b: Task): number {
   return (
     priorityScore(a) - priorityScore(b) ||
     dateScore(a) - dateScore(b) ||
-    (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0) ||
+    (Date.parse(b.updatedAt ?? b.createdAt) || 0) - (Date.parse(a.updatedAt ?? a.createdAt) || 0) ||
+    (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0) ||
     a.title.localeCompare(b.title)
   );
 }

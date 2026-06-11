@@ -54,7 +54,12 @@ function compareTodayFocus(a: Task, b: Task): number {
   if (aOrder !== null && bOrder !== null && aOrder !== bOrder) return aOrder - bOrder;
   if (aOrder !== null && bOrder === null) return -1;
   if (aOrder === null && bOrder !== null) return 1;
-  const created = (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0);
+  const priorityScore = (task: Task) => task.priority === 'high' ? 0 : task.priority === 'medium' ? 1 : 2;
+  const priority = priorityScore(a) - priorityScore(b);
+  if (priority !== 0) return priority;
+  const updated = (Date.parse(b.updatedAt ?? b.createdAt) || 0) - (Date.parse(a.updatedAt ?? a.createdAt) || 0);
+  if (updated !== 0) return updated;
+  const created = (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0);
   if (created !== 0) return created;
   return a.title.localeCompare(b.title);
 }
