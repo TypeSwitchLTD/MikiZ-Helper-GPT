@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { LinkifiedText } from "../../components/ui/LinkifiedText";
 import type { AppSettings } from "../../domain/settings/settingsTypes";
+import type { CreateTaskInput } from "../../domain/tasks/taskMutations";
 import { getTaskProgress } from "../../domain/tasks/taskProgress";
 import type { Subtask, Task } from "../../domain/tasks/taskTypes";
 
@@ -18,6 +19,9 @@ interface ProcessesTabProps {
   onChangeSubtaskStatus: (subtaskId: string, status: Subtask["status"]) => Promise<void> | void;
   onAddSubtaskToFocus?: (taskId: string, subtaskId: string) => Promise<void> | void;
   onJumpToTask: (taskId: string) => void;
+  onCreateTask: (input: CreateTaskInput) => Promise<void> | void;
+  onCancelTask: (taskId: string) => Promise<void> | void;
+  todayISO: string;
 }
 
 function isProcessTask(task: Task, taskSubtasks: Subtask[]): boolean {
@@ -54,14 +58,19 @@ export function ProcessesTab({
   subtasks,
   settings,
   isSaving,
+  todayISO,
   onAddSubtaskToTask,
   onChangeSubtaskStatus,
   onAddSubtaskToFocus,
   onJumpToTask,
+  onCreateTask,
+  onCancelTask,
 }: ProcessesTabProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [expandedDone, setExpandedDone] = useState<Record<string, boolean>>({});
   const [actionStatus, setActionStatus] = useState("");
+  const [processTitle, setProcessTitle] = useState("");
+  const [processSteps, setProcessSteps] = useState("");
 
   const processes = useMemo(() => {
     return tasks
@@ -109,6 +118,52 @@ export function ProcessesTab({
     setActionStatus(`נוספו ${lines.length} צעדים לתהליך.`);
   };
 
+  const handleCreateProcess = async () => {
+    const title = processTitle.trim();
+    const steps = processSteps
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!title || steps.length === 0) {
+      setActionStatus("צריך כותרת ולפחות צעד אחד כדי ליצור תהליך.");
+      return;
+    }
+    await onCreateTask({
+      title,
+      projectId: "timeraligner",
+      domainId: "operations",
+      bucket: "backlog",
+      date: todayISO,
+      originalDate: todayISO,
+      scheduledTimeLabel: "תהליך ארוך",
+      estimatedDurationMinutes: null,
+      durationLabel: undefined,
+      priority: "high",
+      effort: "deep",
+      isQuickWin: false,
+      isRecurring: false,
+      recurrenceDefinitionId: null,
+      backlogGroup: "this_week",
+      tags: ["process", "long"],
+      whyNow: "תהליך ארוך שנוצר ידנית.",
+      notes: undefined,
+      aiConversationUrl: null,
+      statusOverride: null,
+      movedToDate: null,
+      completedAt: null,
+      cancelledAt: null,
+      subtasks: steps.map((step) => ({ title: step, domainId: "operations" })),
+    });
+    setProcessTitle("");
+    setProcessSteps("");
+    setActionStatus(`נוצר תהליך חדש עם ${steps.length} צעדים.`);
+  };
+
+  const handleDeleteProcess = async (taskId: string) => {
+    await onCancelTask(taskId);
+    setActionStatus("התהליך הוסר מהתצוגה.");
+  };
+
   return (
     <div dir="rtl" className="space-y-4">
       <section className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sky-100 sm:p-5">
@@ -142,6 +197,38 @@ export function ProcessesTab({
           {actionStatus}
         </p>
       ) : null}
+
+      <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:p-5">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)_auto] lg:items-end">
+          <label className="text-xs font-black text-slate-500">
+            תהליך חדש
+            <input
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-cyan-200 focus:ring-2 focus:ring-cyan-100"
+              value={processTitle}
+              onChange={(event) => setProcessTitle(event.target.value)}
+              placeholder="למשל: TimerAligner - לוגיסטיקה"
+            />
+          </label>
+          <label className="text-xs font-black text-slate-500">
+            צעדים
+            <textarea
+              rows={3}
+              className="mt-2 w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-cyan-200 focus:ring-2 focus:ring-cyan-100"
+              value={processSteps}
+              onChange={(event) => setProcessSteps(event.target.value)}
+              placeholder={"כל שורה = תת-משימה\nלקבל הצעת מחיר\nלהגדיר QC\nלסגור ספק"}
+            />
+          </label>
+          <button
+            type="button"
+            className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+            disabled={isSaving || !processTitle.trim() || !processSteps.trim()}
+            onClick={() => void handleCreateProcess()}
+          >
+            צור תהליך
+          </button>
+        </div>
+      </section>
 
       {nextStepQueue.length > 0 ? (
         <section className="rounded-3xl bg-slate-950 p-4 text-white shadow-soft sm:p-5">
@@ -221,6 +308,14 @@ export function ProcessesTab({
                     onClick={() => onJumpToTask(task.id)}
                   >
                     פתח
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100 disabled:opacity-50"
+                    disabled={isSaving}
+                    onClick={() => void handleDeleteProcess(task.id)}
+                  >
+                    מחק
                   </button>
                 </div>
 

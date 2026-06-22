@@ -16,6 +16,7 @@ import { createId } from '../utils/ids';
 import { nowISO, getTodayISO } from '../utils/dates';
 import { prepareSubtaskForImport, prepareTaskForImport, type ImportMergeOptions } from './importMerge';
 import { mergeImportedSettingsPreservingLocalSecrets } from './settingsMerge';
+import { ensureTimerAlignerLogisticsProcess } from '../domain/processes/processTemplates';
 
 export class MissionControlDatabase extends Dexie {
   tasks!: Table<Task, string>;
@@ -217,6 +218,12 @@ export async function initializeLocalDatabase(): Promise<void> {
   initializationPromise ??= seedDatabaseIfNeeded().catch((err) => {
     initializationPromise = null; // allow retry on next load
     console.warn('[DB] Seed step failed (non-fatal):', err instanceof Error ? err.message : err);
+  }).then(async () => {
+    try {
+      await ensureTimerAlignerLogisticsProcess();
+    } catch (err) {
+      console.warn('[DB] Process template step failed (non-fatal):', err instanceof Error ? err.message : err);
+    }
   });
   return initializationPromise;
 }

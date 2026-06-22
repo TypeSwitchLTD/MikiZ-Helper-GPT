@@ -11,7 +11,7 @@ import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOr
 
 export const DATABASE_NAME = 'mission-control-local';
 export const DATABASE_VERSION = 8;
-export const APP_VERSION = '0.8.23';
+export const APP_VERSION = '0.8.24';
 
 export interface BackupSnapshot {
   id: string;

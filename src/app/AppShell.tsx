@@ -27,7 +27,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.23";
+const APP_VERSION = "0.8.24";
 const FOCUS_TIMER_STATE_KEY = "mission-control-focus-timer-state";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
@@ -1078,9 +1078,12 @@ export function AppShell() {
             subtasks={data.subtasks}
             settings={data.settings}
             isSaving={data.isSaving}
+            todayISO={data.todayISO}
             onAddSubtaskToTask={data.addSubtaskToExistingTask}
             onChangeSubtaskStatus={data.changeSubtaskStatus}
             onAddSubtaskToFocus={data.addSubtaskToFocusDeck}
+            onCreateTask={data.createTask}
+            onCancelTask={data.cancelExistingTask}
             onJumpToTask={(taskId) => {
               setActiveTab("tasks");
               setFocusedTaskId(taskId);
