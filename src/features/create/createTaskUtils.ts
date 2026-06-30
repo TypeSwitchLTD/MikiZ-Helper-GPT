@@ -319,6 +319,58 @@ export function buildReviewRowsForSingleParent(
     .filter((row) => row.text.length > 0);
 }
 
+interface ParsedTaskGroup {
+  title: string;
+  subtasks: string[];
+}
+
+function parseNumberedTaskGroups(lines: string[]): ParsedTaskGroup[] {
+  const groups: ParsedTaskGroup[] = [];
+  let current: ParsedTaskGroup | null = null;
+
+  lines.forEach((line) => {
+    const topLevelNumbered = line.match(/^\s*\d+[.)\-:]\s*(.+)$/);
+    const bullet = line.match(/^\s*(?:[-•*]|[a-zA-Z][.)])\s*(.+)$/);
+    const indented = line.match(/^\s{2,}(.+)$/);
+
+    if (topLevelNumbered) {
+      const title = stripTemporalWords(cleanTaskText(topLevelNumbered[1] ?? ''));
+      if (title) {
+        current = { title, subtasks: [] };
+        groups.push(current);
+      }
+      return;
+    }
+
+    const childText = bullet?.[1] ?? indented?.[1];
+    if (current && childText) {
+      const subtask = stripTemporalWords(cleanTaskText(childText));
+      if (subtask) current.subtasks.push(subtask);
+    }
+  });
+
+  return groups.filter((group) => group.title.length > 0);
+}
+
+function buildReviewRowsFromTaskGroups(groups: ParsedTaskGroup[], todayISO: string): ParsedReviewRow[] {
+  let index = 0;
+  return groups.flatMap((group) => {
+    const rowDate = getDateFromHebrewText(group.title, todayISO);
+    const rowTexts = group.subtasks.length > 0 ? group.subtasks : [group.title];
+    return rowTexts.map((text) => ({
+      id: createReviewRowId(index++),
+      text,
+      targetMode: 'new_task' as const,
+      targetTaskId: null,
+      targetTitle: group.title,
+      date: rowDate.date,
+      label: rowDate.label,
+      search: '',
+      confidence: 'new' as const,
+    }));
+  });
+}
+
 export function groupKeyForNewTask(row: ParsedReviewRow): string {
   return `${normalizeComparableText(row.targetTitle || row.text)}::${row.date || ''}`;
 }
@@ -441,6 +493,20 @@ export function parseIntakeText(
   const numberedSubtasks: string[] = [];
   const titleLines: string[] = [];
   let sawList = false;
+  const rawLines = normalized.split('\n').filter((line) => line.trim().length > 0);
+  const numberedTaskGroups = parseNumberedTaskGroups(rawLines);
+
+  if (numberedTaskGroups.length > 1) {
+    const reviewRows = buildReviewRowsFromTaskGroups(numberedTaskGroups, todayISO);
+    return {
+      title: numberedTaskGroups[0]?.title ?? '',
+      subtasks: reviewRows.map((row) => row.text),
+      date: parsedDate.date,
+      label: parsedDate.label,
+      sourceNote: `טקסט מקור: ${normalized}`,
+      reviewRows,
+    };
+  }
 
   lines.forEach((line) => {
     const numbered = line.match(/^(?:\d+[.)\-:]|[-•*])\s*(.+)$/);

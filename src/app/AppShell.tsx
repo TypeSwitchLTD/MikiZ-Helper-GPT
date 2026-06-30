@@ -1328,9 +1328,9 @@ export function AppShell() {
 
   // ─── Main layout ──────────────────────────────────────────────────────────────
   return (
-    <main dir="rtl" className="min-h-screen text-slate-900" style={{ background: theme.mainBg }}>
+    <main dir="rtl" className="min-h-dvh text-slate-900" style={{ background: theme.mainBg }}>
       <div
-        className={`grid min-h-screen transition-[grid-template-columns] duration-200 ${
+        className={`grid min-h-dvh transition-[grid-template-columns] duration-200 ${
           isRailCollapsed
             ? "xl:grid-cols-[76px_minmax(0,1fr)]"
             : "xl:grid-cols-[292px_minmax(0,1fr)]"
@@ -1370,7 +1370,7 @@ export function AppShell() {
 
         {/* Sidebar */}
         <aside
-          className={`mission-scroll sticky top-0 z-40 hidden h-screen overflow-y-auto border-l p-3 shadow-soft backdrop-blur-xl xl:flex xl:flex-col xl:gap-3 ${theme.sidebarBg} ${theme.sidebarBorder}`}
+          className={`mission-scroll sticky top-0 z-40 hidden h-dvh max-h-dvh overflow-y-auto border-l p-3 shadow-soft backdrop-blur-xl xl:flex xl:flex-col xl:gap-3 ${theme.sidebarBg} ${theme.sidebarBorder}`}
         >
           <input
             ref={dailyStateInputRef}
@@ -1524,7 +1524,7 @@ export function AppShell() {
         </aside>
 
         {/* Main content */}
-        <section ref={mainSectionRef} className="mission-scroll min-w-0 px-2 pb-4 pt-0 sm:px-5 lg:px-8 xl:h-screen xl:overflow-y-auto">
+        <section ref={mainSectionRef} className="min-w-0 px-2 pb-24 pt-0 sm:px-5 lg:px-8 xl:pb-8">
           <header
             className={`sticky top-0 z-30 -mx-2 mb-2 border-b px-2 backdrop-blur-xl transition-[padding] duration-200 sm:-mx-5 sm:mb-4 sm:px-5 lg:-mx-8 lg:px-8 ${scrollCompact ? "py-1" : "py-1.5 sm:py-2"} ${theme.headerBg} ${theme.headerBorder}`}
           >

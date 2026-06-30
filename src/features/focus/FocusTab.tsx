@@ -448,7 +448,7 @@ export function FocusTab({
           <p className="mt-2 text-sm font-bold text-slate-500">עבור ללשונית משימות ולחץ + פוקוס על משימת על או תת־משימה.</p>
         </section>
       ) : (
-        <section className={hyperFocusItem ? "grid gap-3" : "grid max-h-[calc(100dvh-19rem)] gap-3 overflow-y-auto pr-0.5 sm:grid-cols-2"}>
+        <section className={hyperFocusItem ? "grid gap-3" : "grid gap-3 sm:grid-cols-2"}>
           {visibleItems.map((item, index) => renderFocusCard(item, index))}
         </section>
       )}

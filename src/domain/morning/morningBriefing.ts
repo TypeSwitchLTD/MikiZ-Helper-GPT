@@ -19,6 +19,7 @@ export interface BuildMorningBriefingInput {
 // finance/open invoices, people waiting for replies, and project bottlenecks.
 
 const MORNING_TOP_TASK_LIMIT = 3;
+const MORNING_WORK_LINE_LIMIT = 3;
 const MORNING_BACKLOG_LIMIT = 2;
 const MORNING_REMINDER_LIMIT = 3;
 const MAX_SPOKEN_WORDS = 12;
@@ -38,6 +39,7 @@ export interface BriefingTaskLine {
   bucket: Task['bucket'];
   backlogGroup?: Task['backlogGroup'];
   updatedAt?: string;
+  parentTitle?: string;
 }
 
 export interface DayPlanBlock {
@@ -148,6 +150,25 @@ function toBriefingTaskLine(task: Task, progress: ReturnType<typeof getTaskProgr
   };
 }
 
+function toBriefingSubtaskLine(task: Task, subtask: Subtask, progress: ReturnType<typeof getTaskProgress>): BriefingTaskLine {
+  return {
+    id: subtask.id,
+    title: subtask.title,
+    projectId: task.projectId,
+    domainId: task.domainId,
+    status: subtask.status,
+    percent: progress.percent,
+    priority: task.priority,
+    effort: task.effort,
+    movedCount: task.movedCount,
+    tags: task.tags,
+    bucket: task.bucket,
+    backlogGroup: task.backlogGroup,
+    updatedAt: subtask.updatedAt,
+    parentTitle: task.title,
+  };
+}
+
 function scoreMorningTask(task: Task, progress: ReturnType<typeof getTaskProgress>, todayISO: string): number {
   const priorityWeight: Record<Task['priority'], number> = { high: 85, medium: 45, low: 15 };
   const effortWeight: Record<Task['effort'], number> = { quick: 12, medium: 6, deep: 0 };
@@ -202,6 +223,46 @@ export function pickMorningTasks(tasks: Task[], subtasks: Subtask[], todayISO: s
     .map(({ task, progress }) => toBriefingTaskLine(task, progress));
 }
 
+function shouldSkipStaleRecurringTask(task: Task, progress: ReturnType<typeof getTaskProgress>, todayISO: string): boolean {
+  if (!task.isRecurring) return false;
+  if (progress.status === 'in_progress' || progress.startedCount > 0) return false;
+  if (task.priority === 'high' || (task.tags ?? []).some((tag) => tag === 'important' || tag === 'morning-important' || tag === 'urgent')) return false;
+  return daysSince(task.updatedAt ?? task.createdAt, todayISO) > 7;
+}
+
+function pickMorningWorkLines(tasks: Task[], subtasks: Subtask[], todayISO: string): BriefingTaskLine[] {
+  const topParents = tasks
+    .filter(isVisibleTask)
+    .filter((task) => task.bucket === 'today')
+    .map((task) => {
+      const taskSubtasks = getSubtasksForTask(task.id, subtasks);
+      const progress = getTaskProgress(task, taskSubtasks);
+      return { task, taskSubtasks, progress, score: scoreMorningTask(task, progress, todayISO) };
+    })
+    .filter(({ progress }) => progress.status !== 'done' && progress.status !== 'cancelled')
+    .filter(({ task, progress }) => !shouldSkipStaleRecurringTask(task, progress, todayISO))
+    .sort((a, b) => {
+      const updatedB = Date.parse(b.task.updatedAt ?? '') || 0;
+      const updatedA = Date.parse(a.task.updatedAt ?? '') || 0;
+      return b.score - a.score || updatedB - updatedA || a.task.title.localeCompare(b.task.title);
+    })
+    .slice(0, MORNING_TOP_TASK_LIMIT);
+
+  const lines = topParents.flatMap(({ task, taskSubtasks, progress }) => {
+    const startedSubtasks = taskSubtasks
+      .filter((subtask) => subtask.status === 'started' && !subtask.completedAt && !subtask.cancelledAt && !subtask.deletedAt)
+      .sort((a, b) => (Date.parse(b.updatedAt ?? '') || 0) - (Date.parse(a.updatedAt ?? '') || 0) || a.sortOrder - b.sortOrder);
+
+    if (startedSubtasks.length > 0) {
+      return startedSubtasks.map((subtask) => toBriefingSubtaskLine(task, subtask, progress));
+    }
+
+    return [toBriefingTaskLine(task, progress)];
+  });
+
+  return lines.slice(0, MORNING_WORK_LINE_LIMIT);
+}
+
 function cleanTaskTitle(title: string): string {
   return title
     .replace(/\s*[-—]\s*/g, ' — ')
@@ -211,6 +272,9 @@ function cleanTaskTitle(title: string): string {
 
 function getTaskLine(task: BriefingTaskLine, index: number): string {
   const title = compactText(cleanTaskTitle(task.title), 14);
+  if (task.parentTitle) {
+    return `${index + 1}. ${title}. מתוך ${compactText(cleanTaskTitle(task.parentTitle), 9)}.`;
+  }
   return `${index + 1}. ${title}.`;
 }
 
@@ -301,7 +365,11 @@ function getTodayReminderLines(input: BuildMorningBriefingInput): string[] {
 function getTodayReminderBriefLines(input: BuildMorningBriefingInput): string[] {
   const reminders = (input.reminders ?? [])
     .filter((reminder) => reminder.status === 'pending')
-    .filter((reminder) => reminder.remindAt.slice(0, 10) <= input.todayISO)
+    .filter((reminder) => {
+      const reminderDate = reminder.remindAt.slice(0, 10);
+      const diff = dayDiff(reminderDate, input.todayISO);
+      return reminderDate <= input.todayISO && (diff === null || diff >= -7);
+    })
     .sort((a, b) => a.remindAt.localeCompare(b.remindAt));
 
   const lines = reminders.slice(0, MORNING_REMINDER_LIMIT).map((reminder, index) => {
@@ -421,32 +489,20 @@ export function buildMorningBriefingText(input: BuildMorningBriefingInput): stri
     .filter((task) => task.bucket === 'today' && task.date === input.todayISO)
     .length;
   const topTasks = pickMorningTasks(input.tasks.filter(isVisibleTask), input.subtasks, input.todayISO, MORNING_TOP_TASK_LIMIT);
-  const topTaskIds = new Set(topTasks.map((task) => task.id));
-  const backlogTasks = getBacklogTasks(input.tasks, input.subtasks, input.todayISO, MORNING_BACKLOG_LIMIT + topTasks.length)
-    .filter((task) => !topTaskIds.has(task.id))
-    .slice(0, MORNING_BACKLOG_LIMIT);
-  const openBacklogCount = getOpenBacklogCount(input.tasks, input.subtasks);
+  const workLines = pickMorningWorkLines(input.tasks, input.subtasks, input.todayISO);
   const todayReminderLines = getTodayReminderBriefLines(input);
   const holidayReminderLines = getHolidayReminderLines(input.weather);
   const reminderLines = [...holidayReminderLines, ...todayReminderLines];
   const importantNote = getImportantTaskNote(topTasks, visibleTodayCount);
   const reminderConclusion = getReminderConclusion(todayReminderLines.length, holidayReminderLines.length);
-  const taskLines = topTasks.length
-    ? topTasks.map((task, index) => getTaskLine(task, index))
+  const taskLines = workLines.length
+    ? workLines.map((task, index) => getTaskLine(task, index))
     : ['אין משימות להיום.'];
-  const backlogLines = backlogTasks.length
-    ? [
-        `יש ${openBacklogCount} פריטי Backlog פתוחים.`,
-        ...backlogTasks.map((task, index) => getTaskLine(task, index)),
-        ...(openBacklogCount > backlogTasks.length ? [`ועוד ${openBacklogCount - backlogTasks.length} בבקלוג, לא מקריא עכשיו.`] : []),
-      ]
-    : ['אין משימות Backlog פתוחות להצגה.'];
 
   const sections = [
     morning?.includeGreeting === false ? '' : getOpeningLines(input, nickname).join('\n'),
-    morning?.includeTopTasks === false ? '' : `משימות להיום:\n${taskLines.join('\n')}`,
+    morning?.includeTopTasks === false ? '' : `התקדמות היום:\n${taskLines.join('\n')}`,
     importantNote ?? '',
-    `משימות בקלוג:\n${backlogLines.join('\n')}`,
     morning?.includeReminders === false
       ? ''
       : `תזכורות להיום:\n${reminderLines.length ? reminderLines.join('\n') : 'אין תזכורות להיום.'}`,

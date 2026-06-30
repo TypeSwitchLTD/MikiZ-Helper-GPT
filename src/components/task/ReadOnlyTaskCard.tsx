@@ -731,6 +731,24 @@ export function ReadOnlyTaskCard({
                 {taskAiProviderLabel}
               </button>
             ) : null}
+            {onAddTaskToFocus ? (
+              <button
+                type="button"
+                className={`rounded-full px-2 py-0.5 font-black ring-1 transition sm:py-1 ${
+                  isFocused
+                    ? "bg-cyan-600 text-white ring-cyan-600"
+                    : "bg-cyan-50 text-cyan-800 ring-cyan-100 hover:bg-cyan-100"
+                }`}
+                disabled={isSaving}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleAddTaskToFocus();
+                }}
+                title={isFocused ? "כבר בפוקוס" : "הוסף לפוקוס"}
+              >
+                {isFocused ? "בפוקוס" : "+ פוקוס"}
+              </button>
+            ) : null}
             <span
               className={`rounded-full px-2 py-0.5 font-bold ring-1 sm:py-1 ${getStatusBadgeClass(progress)}`}
             >
