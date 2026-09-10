@@ -134,5 +134,6 @@ export function cloneCostingForActual(planned: OrderCosting): Omit<OrderCosting,
     personalizationTotal: planned.personalizationTotal,
     discountTotal: planned.discountTotal,
     destination: planned.destination,
+    exchangeRateILS: planned.exchangeRateILS,
   };
 }

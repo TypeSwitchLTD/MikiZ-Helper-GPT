@@ -7,6 +7,7 @@ import {
   createDefaultCostProfile,
   getKitUnitCost,
 } from '../../domain/sales/costing';
+import { getUsdToIlsRate, type ExchangeRate } from '../../domain/sales/exchangeRate';
 import type {
   CostProfile,
   CostingPhase,
@@ -61,6 +62,12 @@ function money(value: number, currency = 'USD') {
   return `${rounded < 0 ? '-' : ''}${symbol}${Math.abs(rounded).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** Keeps the minus sign in front of the symbol: -₪181, not ₪-181 */
+function formatIls(value: number) {
+  const rounded = Math.round(value);
+  return `${rounded < 0 ? '-' : ''}₪${Math.abs(rounded).toLocaleString('en-US')}`;
+}
+
 function draftFromCosting(costing: OrderCosting): Draft {
   return {
     quantity: String(costing.quantity),
@@ -98,6 +105,16 @@ export function ProfitabilityPanel({
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [bookOpen, setBookOpen] = useState(false);
   const [message, setMessage] = useState('');
+  const [fx, setFx] = useState<ExchangeRate | null>(null);
+
+  // USD→ILS, refreshed at most once a week (cached in localStorage)
+  useEffect(() => {
+    let cancelled = false;
+    void getUsdToIlsRate().then((rate) => {
+      if (!cancelled) setFx(rate);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const activeProfile = useMemo(
     () => costProfiles.find((profile) => profile.productId === selectedProductId && profile.active && !profile.deletedAt) ?? null,
@@ -150,6 +167,11 @@ export function ProfitabilityPanel({
   const currency = activeProfile?.currency ?? 'USD';
   const kitUnitCost = activeProfile ? getKitUnitCost(activeProfile.components) : 0;
 
+  // A saved costing keeps the rate it was closed at; a fresh one uses today's
+  const effectiveRate = currentCosting?.exchangeRateILS ?? fx?.rate ?? null;
+  const showIls = currency === 'USD' && Boolean(effectiveRate);
+  const ils = (usd: number) => (effectiveRate ? formatIls(usd * effectiveRate) : '');
+
   async function createProfile() {
     if (!selectedProductId) return setMessage('בחר מוצר קודם.');
     await onAddCostProfile(createDefaultCostProfile(selectedProductId));
@@ -170,6 +192,7 @@ export function ProfitabilityPanel({
       discountTotal: num(draft.discountTotal),
       destination: draft.destination || undefined,
       notes: draft.notes || undefined,
+      exchangeRateILS: fx?.rate ?? null,
     };
 
     if (currentCosting) {
@@ -239,6 +262,8 @@ export function ProfitabilityPanel({
 
   const plannedBreakdown = plannedCosting ? calculateBreakdown(plannedCosting) : null;
   const actualBreakdown = actualCosting ? calculateBreakdown(actualCosting) : null;
+  // The closing rate is what the sale actually settled at
+  const comparisonRate = currency === 'USD' ? (actualCosting?.exchangeRateILS ?? fx?.rate ?? null) : null;
 
   return (
     <div className="space-y-5">
@@ -444,7 +469,27 @@ export function ProfitabilityPanel({
                     <span>{breakdown.marginPercent.toFixed(1)}% מרווח</span>
                     <span dir="ltr">{money(breakdown.profitPerUnit, currency)} ליחידה</span>
                   </div>
+                  {showIls ? (
+                    <div className="mt-2 flex items-baseline justify-between border-t border-white/25 pt-2 text-xs font-black">
+                      <span className="opacity-70">בשקלים</span>
+                      <span className="tabular-nums" dir="ltr">{ils(breakdown.profit)}</span>
+                    </div>
+                  ) : null}
                 </div>
+
+                {showIls ? (
+                  <p className="mt-2 flex items-center justify-between text-[11px] font-bold text-slate-400">
+                    <span>הכנסה {ils(breakdown.revenue)} · עלות {ils(breakdown.totalCost)}</span>
+                    <button
+                      type="button"
+                      className="underline decoration-dotted hover:text-slate-600"
+                      onClick={() => void getUsdToIlsRate(true).then(setFx)}
+                      title={fx ? `עודכן ${new Date(fx.fetchedAt).toLocaleDateString('he-IL')}` : ''}
+                    >
+                      ${'‎'}1 = ₪{effectiveRate?.toFixed(2)}
+                    </button>
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -495,6 +540,14 @@ export function ProfitabilityPanel({
                     {`${actualBreakdown.profit - plannedBreakdown.profit > 0 ? '+' : ''}${money(actualBreakdown.profit - plannedBreakdown.profit, currency)}`}
                   </td>
                 </tr>
+                {comparisonRate ? (
+                  <tr className="text-xs font-bold text-slate-400">
+                    <td className="py-1">בשקלים</td>
+                    <td className="py-1 text-left tabular-nums" dir="ltr">{formatIls(plannedBreakdown.profit * comparisonRate)}</td>
+                    <td className="py-1 text-left tabular-nums" dir="ltr">{formatIls(actualBreakdown.profit * comparisonRate)}</td>
+                    <td className="py-1 text-left tabular-nums" dir="ltr">{formatIls((actualBreakdown.profit - plannedBreakdown.profit) * comparisonRate)}</td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>

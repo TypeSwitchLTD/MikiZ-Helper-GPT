@@ -186,6 +186,8 @@ export interface OrderCosting {
   discountTotal: number;
   destination?: string;
   notes?: string;
+  /** USD→ILS rate captured when this costing was saved, so past numbers stay put */
+  exchangeRateILS?: number | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
