@@ -7,7 +7,7 @@ import type { Reminder } from '../reminders/reminderTypes';
 import type { AppSettings } from '../settings/settingsTypes';
 import type { Subtask, Task } from '../tasks/taskTypes';
 import type { DailyHabit, DailyHabitLog } from '../habits/habitTypes';
-import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../sales/salesTypes';
+import type { Allocation, CostProfile, Customer, OrderCosting, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../sales/salesTypes';
 
 export interface CloudSyncPayload {
   schemaVersion: '0.6.0';
@@ -30,6 +30,8 @@ export interface CloudSyncPayload {
   orderItems?: OrderItem[];
   productionBatches?: ProductionBatch[];
   allocations?: Allocation[];
+  costProfiles?: CostProfile[];
+  orderCostings?: OrderCosting[];
   settings: AppSettings;
 }
 

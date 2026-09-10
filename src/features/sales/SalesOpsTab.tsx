@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react';
 import { SectionCard } from '../../components/layout/SectionCard';
+import { ProfitabilityPanel } from './ProfitabilityPanel';
 import type { CreateTaskInput } from '../../domain/tasks/taskMutations';
 import type { Task } from '../../domain/tasks/taskTypes';
 import type {
   Allocation,
+  CostProfile,
   Customer,
   CustomerStatus,
+  OrderCosting,
   OrderItem,
   OrderSource,
   OrderStatus,
@@ -26,6 +29,8 @@ interface SalesOpsTabProps {
   orderItems: OrderItem[];
   productionBatches: ProductionBatch[];
   allocations: Allocation[];
+  costProfiles: CostProfile[];
+  orderCostings: OrderCosting[];
   tasks: Task[];
   todayISO: string;
   isSaving?: boolean;
@@ -39,6 +44,10 @@ interface SalesOpsTabProps {
   onAddProductionBatch: (input: Parameters<typeof import('../../domain/sales/salesMutations').createProductionBatch>[0]) => Promise<ProductionBatch>;
   onAddAllocation: (input: Parameters<typeof import('../../domain/sales/salesMutations').createAllocation>[0]) => Promise<Allocation>;
   onCreateTask: (input: CreateTaskInput) => Promise<void>;
+  onAddCostProfile: (input: Parameters<typeof import('../../domain/sales/salesMutations').createCostProfile>[0]) => Promise<CostProfile>;
+  onEditCostProfile: (profileId: string, patch: Partial<CostProfile>) => Promise<void>;
+  onAddOrderCosting: (input: Parameters<typeof import('../../domain/sales/salesMutations').createOrderCosting>[0]) => Promise<OrderCosting>;
+  onEditOrderCosting: (costingId: string, patch: Partial<OrderCosting>) => Promise<void>;
 }
 
 const customerStatusLabels: Record<CustomerStatus, string> = {
@@ -133,6 +142,8 @@ export function SalesOpsTab({
   orderItems,
   productionBatches,
   allocations,
+  costProfiles,
+  orderCostings,
   tasks,
   todayISO,
   isSaving,
@@ -146,6 +157,10 @@ export function SalesOpsTab({
   onAddProductionBatch,
   onAddAllocation,
   onCreateTask,
+  onAddCostProfile,
+  onEditCostProfile,
+  onAddOrderCosting,
+  onEditOrderCosting,
 }: SalesOpsTabProps) {
   const [selectedCustomerId, setSelectedCustomerId] = useState(customers[0]?.id ?? '');
   const [message, setMessage] = useState('');
@@ -341,6 +356,18 @@ export function SalesOpsTab({
         </div>
         {message ? <p className="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800 ring-1 ring-emerald-100">{message}</p> : null}
       </SectionCard>
+
+      <ProfitabilityPanel
+        orders={orders}
+        products={products}
+        costProfiles={costProfiles}
+        orderCostings={orderCostings}
+        isSaving={isSaving}
+        onAddCostProfile={onAddCostProfile}
+        onEditCostProfile={onEditCostProfile}
+        onAddOrderCosting={onAddOrderCosting}
+        onEditOrderCosting={onEditOrderCosting}
+      />
 
       <div className="grid gap-5 xl:grid-cols-[0.9fr_1.4fr]">
         <SectionCard title="לקוח חדש" description="רק מי שכבר הגיע לפגישה נכנס לכאן.">

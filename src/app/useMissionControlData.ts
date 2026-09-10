@@ -16,16 +16,21 @@ import { createHabit, updateHabit, deleteHabit, reorderHabits, incrementHabitCou
 import type { DailyHabit, DailyHabitLog } from '../domain/habits/habitTypes';
 import {
   createAllocation,
+  createCostProfile,
   createCustomer,
+  createOrderCosting,
   createOrderItem,
   createProduct,
   createProductionBatch,
   createSalesOrder,
   createSupplier,
+  deleteOrderCosting,
+  updateCostProfile,
   updateCustomer,
+  updateOrderCosting,
   updateSalesOrder,
 } from '../domain/sales/salesMutations';
-import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../domain/sales/salesTypes';
+import type { Allocation, CostProfile, Customer, OrderCosting, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../domain/sales/salesTypes';
 import { updateAppSettings, type SettingsPatch } from '../domain/settings/settingsService';
 import { createDefaultSettings } from '../domain/settings/defaultSettings';
 import type { AppSettings } from '../domain/settings/settingsTypes';
@@ -77,6 +82,8 @@ interface MissionControlData {
   orderItems: OrderItem[];
   productionBatches: ProductionBatch[];
   allocations: Allocation[];
+  costProfiles: CostProfile[];
+  orderCostings: OrderCosting[];
 }
 
 const emptyData: MissionControlData = {
@@ -98,6 +105,8 @@ const emptyData: MissionControlData = {
   orderItems: [],
   productionBatches: [],
   allocations: [],
+  costProfiles: [],
+  orderCostings: [],
 };
 
 function getCloudTokenFromUrl(): string {
@@ -193,6 +202,8 @@ function buildCloudSyncPayload(localData: MissionControlData): CloudSyncPayload 
     orderItems: localData.orderItems,
     productionBatches: localData.productionBatches,
     allocations: localData.allocations,
+    costProfiles: localData.costProfiles,
+    orderCostings: localData.orderCostings,
     settings: localData.settings,
   };
 }
@@ -1089,6 +1100,73 @@ export function useMissionControlData() {
     [reloadDataAndPushCloud],
   );
 
+  const addCostProfile = useCallback(
+    async (input: Parameters<typeof createCostProfile>[0]) => {
+      try {
+        setIsSaving(true);
+        const profile = await createCostProfile(input);
+        await reloadDataAndPushCloud();
+        return profile;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const editCostProfile = useCallback(
+    async (profileId: string, patch: Partial<CostProfile>) => {
+      try {
+        setIsSaving(true);
+        await updateCostProfile(profileId, patch);
+        await reloadDataAndPushCloud();
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const addOrderCosting = useCallback(
+    async (input: Parameters<typeof createOrderCosting>[0]) => {
+      try {
+        setIsSaving(true);
+        const costing = await createOrderCosting(input);
+        await reloadDataAndPushCloud();
+        return costing;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const editOrderCosting = useCallback(
+    async (costingId: string, patch: Partial<OrderCosting>) => {
+      try {
+        setIsSaving(true);
+        await updateOrderCosting(costingId, patch);
+        await reloadDataAndPushCloud();
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
+  const removeOrderCosting = useCallback(
+    async (costingId: string) => {
+      try {
+        setIsSaving(true);
+        await deleteOrderCosting(costingId);
+        await reloadDataAndPushCloud();
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [reloadDataAndPushCloud],
+  );
+
 
 
   const saveDailyPlan = useCallback(
@@ -1266,5 +1344,10 @@ export function useMissionControlData() {
     addOrderItem,
     addProductionBatch,
     addAllocation,
+    addCostProfile,
+    editCostProfile,
+    addOrderCosting,
+    editOrderCosting,
+    removeOrderCosting,
   };
 }

@@ -116,3 +116,95 @@ export interface Allocation {
   updatedAt: string;
   deletedAt?: string | null;
 }
+
+// ─── Profitability / costing ──────────────────────────────────────────────────
+
+/** One fixed per-unit cost line inside the kit (product, box, sticker, ...) */
+export interface CostComponent {
+  id: string;
+  label: string;
+  unitCost: number;
+  active: boolean;
+}
+
+export type FeeBasis = 'percent' | 'fixed';
+
+/** A commission or fee. Percent applies to revenue, fixed is a flat amount. */
+export interface FeeRule {
+  id: string;
+  label: string;
+  basis: FeeBasis;
+  value: number;
+  active: boolean;
+}
+
+/** Estimated shipping cost for one destination, per order */
+export interface ShippingEstimate {
+  id: string;
+  destination: string;
+  cost: number;
+}
+
+/**
+ * The living price book for a product. Editing it affects NEW costings only —
+ * existing costings keep their own snapshot so history stays honest.
+ */
+export interface CostProfile {
+  id: string;
+  productId: string;
+  currency: string;
+  components: CostComponent[];
+  fees: FeeRule[];
+  shippingEstimates: ShippingEstimate[];
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+export type CostingPhase = 'planned' | 'actual';
+
+/**
+ * A profitability snapshot for one order. Two rows per order at most:
+ * phase='planned' (the quote) and phase='actual' (the closing).
+ */
+export interface OrderCosting {
+  id: string;
+  orderId: string;
+  productId: string;
+  phase: CostingPhase;
+  currency: string;
+  quantity: number;
+  unitPrice: number;
+  /** Snapshot of the price book at the time this costing was created */
+  components: CostComponent[];
+  fees: FeeRule[];
+  shippingTotal: number;
+  customsTotal: number;
+  customStickerUnitCost: number;
+  personalizationTotal: number;
+  discountTotal: number;
+  destination?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+}
+
+/** Derived numbers — never stored, always computed from an OrderCosting */
+export interface CostingBreakdown {
+  revenue: number;
+  kitUnitCost: number;
+  kitTotal: number;
+  customStickerTotal: number;
+  shippingTotal: number;
+  customsTotal: number;
+  personalizationTotal: number;
+  discountTotal: number;
+  feesTotal: number;
+  totalCost: number;
+  netRevenue: number;
+  profit: number;
+  marginPercent: number;
+  profitPerUnit: number;
+}

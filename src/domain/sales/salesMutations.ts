@@ -4,7 +4,9 @@ import { nowISO } from '../../utils/dates';
 import { createLogEvent } from '../logs/logService';
 import type {
   Allocation,
+  CostProfile,
   Customer,
+  OrderCosting,
   OrderItem,
   Product,
   ProductionBatch,
@@ -106,4 +108,47 @@ export async function createAllocation(input: Timestamped<Allocation>): Promise<
     await logSalesChange('Allocation created', { allocationId: allocation.id, orderItemId: allocation.orderItemId, productionBatchId: allocation.productionBatchId });
   });
   return allocation;
+}
+
+// ─── Costing / profitability ──────────────────────────────────────────────────
+
+export async function createCostProfile(input: Timestamped<CostProfile>): Promise<CostProfile> {
+  const timestamp = nowISO();
+  const profile: CostProfile = { ...input, id: createId('cost-profile'), createdAt: timestamp, updatedAt: timestamp, deletedAt: null };
+  await db.transaction('rw', db.costProfiles, db.logs, async () => {
+    await db.costProfiles.add(profile);
+    await logSalesChange('Cost profile created', { costProfileId: profile.id, productId: profile.productId });
+  });
+  return profile;
+}
+
+export async function updateCostProfile(profileId: string, patch: Partial<CostProfile>): Promise<void> {
+  await db.transaction('rw', db.costProfiles, db.logs, async () => {
+    await db.costProfiles.update(profileId, { ...patch, updatedAt: nowISO() });
+    await logSalesChange('Cost profile updated', { costProfileId: profileId });
+  });
+}
+
+export async function createOrderCosting(input: Timestamped<OrderCosting>): Promise<OrderCosting> {
+  const timestamp = nowISO();
+  const costing: OrderCosting = { ...input, id: createId('costing'), createdAt: timestamp, updatedAt: timestamp, deletedAt: null };
+  await db.transaction('rw', db.orderCostings, db.logs, async () => {
+    await db.orderCostings.add(costing);
+    await logSalesChange(`Order costing created (${costing.phase})`, { costingId: costing.id, orderId: costing.orderId });
+  });
+  return costing;
+}
+
+export async function updateOrderCosting(costingId: string, patch: Partial<OrderCosting>): Promise<void> {
+  await db.transaction('rw', db.orderCostings, db.logs, async () => {
+    await db.orderCostings.update(costingId, { ...patch, updatedAt: nowISO() });
+    await logSalesChange('Order costing updated', { costingId });
+  });
+}
+
+export async function deleteOrderCosting(costingId: string): Promise<void> {
+  await db.transaction('rw', db.orderCostings, db.logs, async () => {
+    await db.orderCostings.update(costingId, { deletedAt: nowISO(), updatedAt: nowISO() });
+    await logSalesChange('Order costing deleted', { costingId });
+  });
 }

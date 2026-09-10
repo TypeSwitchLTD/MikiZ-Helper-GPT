@@ -27,7 +27,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.24";
+const APP_VERSION = "0.8.25";
 const FOCUS_TIMER_STATE_KEY = "mission-control-focus-timer-state";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
@@ -1101,6 +1101,8 @@ export function AppShell() {
             orderItems={data.orderItems}
             productionBatches={data.productionBatches}
             allocations={data.allocations}
+            costProfiles={data.costProfiles}
+            orderCostings={data.orderCostings}
             tasks={data.tasks}
             todayISO={data.todayISO}
             isSaving={data.isSaving}
@@ -1114,6 +1116,10 @@ export function AppShell() {
             onAddProductionBatch={data.addProductionBatch}
             onAddAllocation={data.addAllocation}
             onCreateTask={data.createTask}
+            onAddCostProfile={data.addCostProfile}
+            onEditCostProfile={data.editCostProfile}
+            onAddOrderCosting={data.addOrderCosting}
+            onEditOrderCosting={data.editOrderCosting}
           />
         );
       case "social":

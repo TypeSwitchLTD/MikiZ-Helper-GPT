@@ -10,8 +10,8 @@ import type { DailyHabit, DailyHabitLog } from '../domain/habits/habitTypes';
 import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../domain/sales/salesTypes';
 
 export const DATABASE_NAME = 'mission-control-local';
-export const DATABASE_VERSION = 8;
-export const APP_VERSION = '0.8.24';
+export const DATABASE_VERSION = 9;
+export const APP_VERSION = '0.8.25';
 
 export interface BackupSnapshot {
   id: string;

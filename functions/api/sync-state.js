@@ -242,6 +242,8 @@ export async function onRequestGet({ request, env }) {
     const orderItems = arr(storedSettings?.orderItems);
     const productionBatches = arr(storedSettings?.productionBatches);
     const allocations = arr(storedSettings?.allocations);
+    const costProfiles = arr(storedSettings?.costProfiles);
+    const orderCostings = arr(storedSettings?.orderCostings);
     const settings = storedSettings ? { ...storedSettings } : null;
     if (settings) {
       delete settings.focusItems;
@@ -254,6 +256,8 @@ export async function onRequestGet({ request, env }) {
       delete settings.orderItems;
       delete settings.productionBatches;
       delete settings.allocations;
+      delete settings.costProfiles;
+      delete settings.orderCostings;
     }
     const payload = {
       schemaVersion: '0.6.0',
@@ -276,14 +280,16 @@ export async function onRequestGet({ request, env }) {
       orderItems,
       productionBatches,
       allocations,
+      costProfiles,
+      orderCostings,
       settings,
     };
 
     return json({
       ok: true,
-      hasData: tasks.length > 0 || subtasks.length > 0 || reminders.length > 0 || focusItems.length > 0 || habits.length > 0 || habitLogs.length > 0 || customers.length > 0 || products.length > 0 || suppliers.length > 0 || orders.length > 0 || orderItems.length > 0 || productionBatches.length > 0 || allocations.length > 0 || Boolean(settings),
+      hasData: tasks.length > 0 || subtasks.length > 0 || reminders.length > 0 || focusItems.length > 0 || habits.length > 0 || habitLogs.length > 0 || customers.length > 0 || products.length > 0 || suppliers.length > 0 || orders.length > 0 || orderItems.length > 0 || productionBatches.length > 0 || allocations.length > 0 || costProfiles.length > 0 || orderCostings.length > 0 || Boolean(settings),
       payload,
-      counts: { tasks: tasks.length, subtasks: subtasks.length, reminders: reminders.length, focusItems: focusItems.length, habits: habits.length, habitLogs: habitLogs.length, customers: customers.length, products: products.length, suppliers: suppliers.length, orders: orders.length, orderItems: orderItems.length, productionBatches: productionBatches.length, allocations: allocations.length, logs: logs.length },
+      counts: { tasks: tasks.length, subtasks: subtasks.length, reminders: reminders.length, focusItems: focusItems.length, habits: habits.length, habitLogs: habitLogs.length, customers: customers.length, products: products.length, suppliers: suppliers.length, orders: orders.length, orderItems: orderItems.length, productionBatches: productionBatches.length, allocations: allocations.length, costProfiles: costProfiles.length, orderCostings: orderCostings.length, logs: logs.length },
       syncedAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -323,8 +329,10 @@ export async function onRequestPost({ request, env }) {
     counts.orderItems = arr(payload.orderItems).length;
     counts.productionBatches = arr(payload.productionBatches).length;
     counts.allocations = arr(payload.allocations).length;
+    counts.costProfiles = arr(payload.costProfiles).length;
+    counts.orderCostings = arr(payload.orderCostings).length;
 
-    if (payload.settings || counts.focusItems > 0 || counts.habits > 0 || counts.habitLogs > 0 || counts.customers > 0 || counts.products > 0 || counts.suppliers > 0 || counts.orders > 0 || counts.orderItems > 0 || counts.productionBatches > 0 || counts.allocations > 0) {
+    if (payload.settings || counts.focusItems > 0 || counts.habits > 0 || counts.habitLogs > 0 || counts.customers > 0 || counts.products > 0 || counts.suppliers > 0 || counts.orders > 0 || counts.orderItems > 0 || counts.productionBatches > 0 || counts.allocations > 0 || counts.costProfiles > 0 || counts.orderCostings > 0) {
       const settingsForCloud = {
         ...(payload.settings || {}),
         focusItems: arr(payload.focusItems),
@@ -337,6 +345,8 @@ export async function onRequestPost({ request, env }) {
         orderItems: arr(payload.orderItems),
         productionBatches: arr(payload.productionBatches),
         allocations: arr(payload.allocations),
+        costProfiles: arr(payload.costProfiles),
+        orderCostings: arr(payload.orderCostings),
       };
       await restFetch(config, 'app_settings?on_conflict=id', {
         method: 'POST',

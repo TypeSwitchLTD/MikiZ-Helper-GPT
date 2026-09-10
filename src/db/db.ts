@@ -8,7 +8,7 @@ import type { Reminder } from '../domain/reminders/reminderTypes';
 import type { AppSettings } from '../domain/settings/settingsTypes';
 import type { Subtask, Task } from '../domain/tasks/taskTypes';
 import type { DailyHabit, DailyHabitLog } from '../domain/habits/habitTypes';
-import type { Allocation, Customer, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../domain/sales/salesTypes';
+import type { Allocation, CostProfile, Customer, OrderCosting, OrderItem, Product, ProductionBatch, SalesOrder, Supplier } from '../domain/sales/salesTypes';
 import { createDefaultSettings } from '../domain/settings/defaultSettings';
 import { createSeedData } from './seed';
 import { APP_VERSION, DATABASE_NAME, type BackupSnapshot } from './schema';
@@ -38,6 +38,8 @@ export class MissionControlDatabase extends Dexie {
   orderItems!: Table<OrderItem, string>;
   productionBatches!: Table<ProductionBatch, string>;
   allocations!: Table<Allocation, string>;
+  costProfiles!: Table<CostProfile, string>;
+  orderCostings!: Table<OrderCosting, string>;
 
   constructor() {
     super(DATABASE_NAME);
@@ -207,6 +209,39 @@ export class MissionControlDatabase extends Dexie {
         });
       } catch { /* never block db open */ }
     });
+
+    this.version(9).stores({
+      tasks: 'id, bucket, date, projectId, domainId, originalDate, movedToDate, focusOrder, customerId, orderId, createdAt, updatedAt',
+      subtasks: 'id, taskId, status, sortOrder, createdAt, updatedAt',
+      dailyPlans: 'id, date, createdAt, updatedAt',
+      recurringDefinitions: 'id, isActive, frequency, projectId, domainId, createdAt, updatedAt',
+      reports: 'id, date, generatedAt, createdAt, updatedAt',
+      logs: 'id, timestamp, type, entityType, entityId',
+      reminders: 'id, remindAt, taskId, subtaskId, status, createdAt, updatedAt',
+      settings: 'id',
+      snapshots: 'id, createdAt, reason',
+      habits: 'id, active, order, createdAt, updatedAt',
+      habitLogs: 'id, habitId, date, [habitId+date], createdAt',
+      focusItems: 'id, targetType, taskId, subtaskId, sortOrder, addedAt, updatedAt, deletedAt, completedAt',
+      customers: 'id, status, country, createdAt, updatedAt, deletedAt',
+      products: 'id, active, createdAt, updatedAt, deletedAt',
+      suppliers: 'id, type, country, createdAt, updatedAt, deletedAt',
+      orders: 'id, customerId, status, source, expectedCloseDate, dueDate, createdAt, updatedAt, deletedAt',
+      orderItems: 'id, orderId, productId, color, createdAt, updatedAt, deletedAt',
+      productionBatches: 'id, productId, color, supplierId, status, expectedReadyDate, createdAt, updatedAt, deletedAt',
+      allocations: 'id, orderItemId, productionBatchId, createdAt, updatedAt, deletedAt',
+      costProfiles: 'id, productId, active, createdAt, updatedAt, deletedAt',
+      orderCostings: 'id, orderId, productId, phase, [orderId+phase], createdAt, updatedAt, deletedAt',
+    }).upgrade(async (tx) => {
+      try {
+        await tx.table('logs').add({
+          id: createId('log'), timestamp: nowISO(), type: 'note_added',
+          entityType: 'system', entityId: null,
+          message: 'Database migrated to 0.8.25 - added cost profiles and order profitability',
+          metadata: { appVersion: APP_VERSION, migration: 'v9-costing' },
+        });
+      } catch { /* never block db open */ }
+    });
   }
 }
 
@@ -348,7 +383,7 @@ interface GetAllLocalDataOptions {
 }
 
 export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
-  const [rawTasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs, focusItems, customers, products, suppliers, orders, orderItems, productionBatches, allocations] = await Promise.all([
+  const [rawTasks, subtasks, dailyPlans, recurringDefinitions, reports, logs, reminders, settings, habits, habitLogs, focusItems, customers, products, suppliers, orders, orderItems, productionBatches, allocations, costProfiles, orderCostings] = await Promise.all([
     db.tasks.orderBy('createdAt').toArray(),
     db.subtasks.orderBy('sortOrder').toArray(),
     db.dailyPlans.orderBy('date').toArray(),
@@ -367,6 +402,8 @@ export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
     db.orderItems.orderBy('createdAt').toArray(),
     db.productionBatches.orderBy('createdAt').toArray(),
     db.allocations.orderBy('createdAt').toArray(),
+    db.costProfiles.orderBy('createdAt').toArray(),
+    db.orderCostings.orderBy('createdAt').toArray(),
   ]);
 
   const allTasks = rawTasks.map(normalizeTask);
@@ -392,6 +429,8 @@ export async function getAllLocalData(options: GetAllLocalDataOptions = {}) {
     orderItems: options.includeDeleted ? orderItems : orderItems.filter((item) => !item.deletedAt),
     productionBatches: options.includeDeleted ? productionBatches : productionBatches.filter((item) => !item.deletedAt),
     allocations: options.includeDeleted ? allocations : allocations.filter((item) => !item.deletedAt),
+    costProfiles: options.includeDeleted ? costProfiles : costProfiles.filter((item) => !item.deletedAt),
+    orderCostings: options.includeDeleted ? orderCostings : orderCostings.filter((item) => !item.deletedAt),
     settings: settings ?? createDefaultSettings(),
     habits,
     habitLogs,
@@ -421,6 +460,8 @@ interface DailyStateImportPayload {
   orderItems?: OrderItem[];
   productionBatches?: ProductionBatch[];
   allocations?: Allocation[];
+  costProfiles?: CostProfile[];
+  orderCostings?: OrderCosting[];
   settings?: AppSettings | null;
 }
 
@@ -476,8 +517,10 @@ export async function importDailyStatePayload(
   const orderItems = asArray(payload.orderItems);
   const productionBatches = asArray(payload.productionBatches);
   const allocations = asArray(payload.allocations);
+  const costProfiles = asArray(payload.costProfiles);
+  const orderCostings = asArray(payload.orderCostings);
   const settings = payload.settings ?? undefined;
-  const hasSalesPayload = customers.length > 0 || products.length > 0 || suppliers.length > 0 || orders.length > 0 || orderItems.length > 0 || productionBatches.length > 0 || allocations.length > 0;
+  const hasSalesPayload = customers.length > 0 || products.length > 0 || suppliers.length > 0 || orders.length > 0 || orderItems.length > 0 || productionBatches.length > 0 || allocations.length > 0 || costProfiles.length > 0 || orderCostings.length > 0;
 
   if (tasks.length === 0 && subtasks.length === 0 && dailyPlans.length === 0 && focusItems.length === 0 && habits.length === 0 && habitLogs.length === 0 && !hasSalesPayload && !settings) {
     throw new Error('Daily State JSON לא מכיל משימות / תתי־משימות / תוכניות יום לייבוא.');
@@ -485,7 +528,7 @@ export async function importDailyStatePayload(
 
   await db.transaction(
     'rw',
-    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.habits, db.habitLogs, db.focusItems, db.customers, db.products, db.suppliers, db.orders, db.orderItems, db.productionBatches, db.allocations],
+    [db.settings, db.tasks, db.subtasks, db.dailyPlans, db.recurringDefinitions, db.reports, db.logs, db.snapshots, db.reminders, db.habits, db.habitLogs, db.focusItems, db.customers, db.products, db.suppliers, db.orders, db.orderItems, db.productionBatches, db.allocations, db.costProfiles, db.orderCostings],
     async () => {
       const beforeImport = await getAllLocalData();
       await db.snapshots.add({
@@ -589,6 +632,14 @@ export async function importDailyStatePayload(
       if (allocations.length) {
         const existing = await db.allocations.bulkGet(allocations.map((item) => item.id));
         await db.allocations.bulkPut(allocations.map((item, index) => mergeByUpdatedAt(item, existing[index])));
+      }
+      if (costProfiles.length) {
+        const existing = await db.costProfiles.bulkGet(costProfiles.map((item) => item.id));
+        await db.costProfiles.bulkPut(costProfiles.map((item, index) => mergeByUpdatedAt(item, existing[index])));
+      }
+      if (orderCostings.length) {
+        const existing = await db.orderCostings.bulkGet(orderCostings.map((item) => item.id));
+        await db.orderCostings.bulkPut(orderCostings.map((item, index) => mergeByUpdatedAt(item, existing[index])));
       }
 
       await db.logs.add({
