@@ -4,6 +4,7 @@ import { ProfitabilityPanel } from './ProfitabilityPanel';
 import { OrdersOverview } from './OrdersOverview';
 import { CostProfileEditor } from './CostProfileEditor';
 import { DeliveryPlanner } from './DeliveryPlanner';
+import { addDaysToISO } from '../../utils/strings';
 import type { CreateTaskInput } from '../../domain/tasks/taskMutations';
 import type { Task } from '../../domain/tasks/taskTypes';
 import type {
@@ -209,7 +210,7 @@ export function SalesOpsTab({
   const [customerDraft, setCustomerDraft] = useState({ name: '', company: '', country: '', city: '', email: '', whatsapp: '', notes: '' });
   const [productDraft, setProductDraft] = useState({ name: '', sku: '' });
   const [supplierDraft, setSupplierDraft] = useState({ name: '', type: 'production' as SupplierType, country: '', email: '', whatsapp: '' });
-  const [orderDraft, setOrderDraft] = useState({ title: '', source: 'direct' as OrderSource, status: 'potential' as OrderStatus, amount: '', currency: 'USD', dueDate: '', notes: '' });
+  const [orderDraft, setOrderDraft] = useState({ title: '', source: 'direct' as OrderSource, status: 'potential' as OrderStatus, amount: '', currency: 'USD', deliveryDays: '', notes: '' });
   const [itemDraft, setItemDraft] = useState({ orderId: '', productId: '', color: 'white' as ProductColor, quantity: '100', unitPrice: '', priceTier: 'custom' as PriceTier, needsSticker: false, stickerSupplierId: '' });
   const [batchDraft, setBatchDraft] = useState({ productId: '', color: 'white' as ProductColor, supplierId: '', label: '', quantityPlanned: '1000', quantityReceived: '', expectedReadyDate: '' });
   const [allocationDraft, setAllocationDraft] = useState({ orderItemId: '', productionBatchId: '', quantity: '' });
@@ -309,6 +310,8 @@ export function SalesOpsTab({
   async function submitOrder() {
     if (!selectedCustomer) return setMessage('בחר לקוח קודם.');
     const title = orderDraft.title.trim() || `הזמנה - ${selectedCustomer.name}`;
+    const deliveryDays = orderDraft.deliveryDays.trim() === '' ? null : Math.max(0, Math.round(Number(orderDraft.deliveryDays) || 0));
+    const dueDate = deliveryDays === null ? null : addDaysToISO(todayISO, deliveryDays);
     await onAddSalesOrder({
       customerId: selectedCustomer.id,
       title,
@@ -316,11 +319,13 @@ export function SalesOpsTab({
       status: orderDraft.status,
       currency: orderDraft.currency.trim() || 'USD',
       amount: orderDraft.amount ? Number(orderDraft.amount) : null,
-      dueDate: orderDraft.dueDate || null,
-      expectedCloseDate: orderDraft.status === 'potential' ? orderDraft.dueDate || null : null,
+      deliveryDays,
+      deliveryStartDate: deliveryDays === null ? null : todayISO,
+      dueDate,
+      expectedCloseDate: orderDraft.status === 'potential' ? dueDate : null,
       notes: orderDraft.notes.trim() || undefined,
     });
-    setOrderDraft({ title: '', source: 'direct', status: 'potential', amount: '', currency: 'USD', dueDate: '', notes: '' });
+    setOrderDraft({ title: '', source: 'direct', status: 'potential', amount: '', currency: 'USD', deliveryDays: '', notes: '' });
     setMessage('הזמנה נוספה.');
   }
 
@@ -483,7 +488,19 @@ export function SalesOpsTab({
                   <select className={inputClass()} value={orderDraft.source} onChange={(e) => setOrderDraft({ ...orderDraft, source: e.target.value as OrderSource })}>
                     {Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
-                  <input className={inputClass()} type="date" value={orderDraft.dueDate} onChange={(e) => setOrderDraft({ ...orderDraft, dueDate: e.target.value })} />
+                  <label className="grid gap-1">
+                    <span className="text-[11px] font-black text-slate-500">
+                      ימי אספקה{orderDraft.deliveryDays.trim() !== '' ? ` · ${addDaysToISO(todayISO, Math.max(0, Math.round(Number(orderDraft.deliveryDays) || 0)))}` : ''}
+                    </span>
+                    <input
+                      className={inputClass('text-left tabular-nums')}
+                      dir="ltr"
+                      inputMode="numeric"
+                      placeholder="7"
+                      value={orderDraft.deliveryDays}
+                      onChange={(e) => setOrderDraft({ ...orderDraft, deliveryDays: e.target.value })}
+                    />
+                  </label>
                   <input className={inputClass()} placeholder="סכום" value={orderDraft.amount} onChange={(e) => setOrderDraft({ ...orderDraft, amount: e.target.value })} />
                   <input className={inputClass()} placeholder="מטבע" value={orderDraft.currency} onChange={(e) => setOrderDraft({ ...orderDraft, currency: e.target.value })} />
                 </div>
