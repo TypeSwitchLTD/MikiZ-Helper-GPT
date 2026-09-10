@@ -66,6 +66,8 @@ export interface SalesOrder {
   status: OrderStatus;
   currency: string;
   amount?: number | null;
+  /** How much money actually landed. Deposits are entered as they arrive. */
+  paidAmount?: number | null;
   expectedCloseDate?: string | null;
   dueDate?: string | null;
   notes?: string;

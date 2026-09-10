@@ -4,7 +4,6 @@ import {
   buildCostingFromProfile,
   calculateBreakdown,
   cloneCostingForActual,
-  createDefaultCostProfile,
   getKitUnitCost,
 } from '../../domain/sales/costing';
 import { getUsdToIlsRate, type ExchangeRate } from '../../domain/sales/exchangeRate';
@@ -22,8 +21,6 @@ interface ProfitabilityPanelProps {
   costProfiles: CostProfile[];
   orderCostings: OrderCosting[];
   isSaving?: boolean;
-  onAddCostProfile: (input: Omit<CostProfile, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>) => Promise<CostProfile>;
-  onEditCostProfile: (profileId: string, patch: Partial<CostProfile>) => Promise<void>;
   onAddOrderCosting: (input: Omit<OrderCosting, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>) => Promise<OrderCosting>;
   onEditOrderCosting: (costingId: string, patch: Partial<OrderCosting>) => Promise<void>;
 }
@@ -93,8 +90,6 @@ export function ProfitabilityPanel({
   costProfiles,
   orderCostings,
   isSaving,
-  onAddCostProfile,
-  onEditCostProfile,
   onAddOrderCosting,
   onEditOrderCosting,
 }: ProfitabilityPanelProps) {
@@ -103,7 +98,6 @@ export function ProfitabilityPanel({
   const [selectedProductId, setSelectedProductId] = useState(products[0]?.id ?? '');
   const [phase, setPhase] = useState<CostingPhase>('planned');
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [bookOpen, setBookOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [fx, setFx] = useState<ExchangeRate | null>(null);
 
@@ -172,12 +166,6 @@ export function ProfitabilityPanel({
   const showIls = currency === 'USD' && Boolean(effectiveRate);
   const ils = (usd: number) => (effectiveRate ? formatIls(usd * effectiveRate) : '');
 
-  async function createProfile() {
-    if (!selectedProductId) return setMessage('בחר מוצר קודם.');
-    await onAddCostProfile(createDefaultCostProfile(selectedProductId));
-    setMessage('מחירון נוצר עם ברירות המחדל. פתח "מחירון" כדי לערוך.');
-  }
-
   async function saveCosting() {
     if (!activeProfile) return setMessage('אין מחירון למוצר הזה.');
     if (!selectedOrderId) return setMessage('בחר הזמנה.');
@@ -237,24 +225,6 @@ export function ProfitabilityPanel({
     setMessage('נפתחה סגירת מכירה עם הנתונים המתוכננים. עדכן מה שהשתנה בפועל.');
   }
 
-  async function updateComponent(index: number, patch: Partial<CostProfile['components'][number]>) {
-    if (!activeProfile) return;
-    const components = activeProfile.components.map((component, i) => (i === index ? { ...component, ...patch } : component));
-    await onEditCostProfile(activeProfile.id, { components });
-  }
-
-  async function updateFee(index: number, patch: Partial<CostProfile['fees'][number]>) {
-    if (!activeProfile) return;
-    const fees = activeProfile.fees.map((fee, i) => (i === index ? { ...fee, ...patch } : fee));
-    await onEditCostProfile(activeProfile.id, { fees });
-  }
-
-  async function updateShipping(index: number, cost: number) {
-    if (!activeProfile) return;
-    const shippingEstimates = activeProfile.shippingEstimates.map((estimate, i) => (i === index ? { ...estimate, cost } : estimate));
-    await onEditCostProfile(activeProfile.id, { shippingEstimates });
-  }
-
   function pickDestination(destination: string) {
     const estimate = activeProfile?.shippingEstimates.find((entry) => entry.destination === destination);
     setDraft((current) => ({ ...current, destination, shippingTotal: estimate ? String(estimate.cost) : current.shippingTotal }));
@@ -267,93 +237,6 @@ export function ProfitabilityPanel({
 
   return (
     <div className="space-y-5">
-      {/* ── Price book ──────────────────────────────────────────────────────── */}
-      <SectionCard title="מחירון" description="עלויות קבועות ליחידה. שינוי כאן משפיע על הזמנות חדשות בלבד.">
-        <div className="flex flex-wrap items-center gap-3">
-          <select className={inputClass()} value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
-            <option value="">בחר מוצר</option>
-            {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-          </select>
-
-          {activeProfile ? (
-            <>
-              <div className="rounded-2xl bg-slate-950 px-4 py-2 text-white">
-                <span className="text-xs font-bold opacity-70">ערכה ליחידה</span>
-                <span className="mr-2 text-lg font-black">{money(kitUnitCost, currency)}</span>
-              </div>
-              <button type="button" className="rounded-2xl bg-white px-4 py-2 text-sm font-black text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50" onClick={() => setBookOpen((open) => !open)}>
-                {bookOpen ? 'סגור פירוט' : 'ערוך מחירון'}
-              </button>
-            </>
-          ) : selectedProductId ? (
-            <button type="button" className="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50" disabled={isSaving} onClick={() => void createProfile()}>
-              צור מחירון למוצר
-            </button>
-          ) : null}
-        </div>
-
-        {bookOpen && activeProfile ? (
-          <div className="mt-4 grid gap-4 lg:grid-cols-3">
-            <div>
-              <p className="mb-2 text-xs font-black text-slate-500">רכיבי הערכה</p>
-              <div className="grid gap-2">
-                {activeProfile.components.map((component, index) => (
-                  <div key={component.id} className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2 ring-1 ring-slate-200">
-                    <input type="checkbox" checked={component.active} onChange={(e) => void updateComponent(index, { active: e.target.checked })} />
-                    <span className="flex-1 text-sm font-bold text-slate-700">{component.label}</span>
-                    <input
-                      className="w-20 rounded-xl border border-slate-200 px-2 py-1 text-left text-sm font-black tabular-nums"
-                      dir="ltr"
-                      value={component.unitCost}
-                      onChange={(e) => void updateComponent(index, { unitCost: num(e.target.value) })}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-black text-slate-500">עמלות</p>
-              <div className="grid gap-2">
-                {activeProfile.fees.map((fee, index) => (
-                  <div key={fee.id} className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2 ring-1 ring-slate-200">
-                    <input type="checkbox" checked={fee.active} onChange={(e) => void updateFee(index, { active: e.target.checked })} />
-                    <span className="flex-1 text-sm font-bold text-slate-700">{fee.label}</span>
-                    <select className="rounded-xl border border-slate-200 px-1 py-1 text-xs font-black" value={fee.basis} onChange={(e) => void updateFee(index, { basis: e.target.value as 'percent' | 'fixed' })}>
-                      <option value="percent">%</option>
-                      <option value="fixed">קבוע</option>
-                    </select>
-                    <input
-                      className="w-16 rounded-xl border border-slate-200 px-2 py-1 text-left text-sm font-black tabular-nums"
-                      dir="ltr"
-                      value={fee.value}
-                      onChange={(e) => void updateFee(index, { value: num(e.target.value) })}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-black text-slate-500">הערכת שילוח (להזמנה)</p>
-              <div className="grid gap-2">
-                {activeProfile.shippingEstimates.map((estimate, index) => (
-                  <div key={estimate.id} className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2 ring-1 ring-slate-200">
-                    <span className="flex-1 text-sm font-bold text-slate-700">{estimate.destination}</span>
-                    <input
-                      className="w-20 rounded-xl border border-slate-200 px-2 py-1 text-left text-sm font-black tabular-nums"
-                      dir="ltr"
-                      value={estimate.cost}
-                      onChange={(e) => void updateShipping(index, num(e.target.value))}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </SectionCard>
-
       {/* ── Costing form ────────────────────────────────────────────────────── */}
       <SectionCard
         title={phase === 'planned' ? 'רווחיות — הצעה' : 'רווחיות — סגירת מכירה'}
@@ -364,6 +247,17 @@ export function ProfitabilityPanel({
             <option value="">בחר הזמנה</option>
             {visibleOrders.map((order) => <option key={order.id} value={order.id}>{order.title}</option>)}
           </select>
+
+          <select className={inputClass()} value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
+            <option value="">בחר מוצר</option>
+            {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+          </select>
+
+          {activeProfile ? (
+            <span className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">
+              ערכה <span className="tabular-nums text-slate-900" dir="ltr">{money(kitUnitCost, currency)}</span> ליחידה
+            </span>
+          ) : null}
 
           <div className="flex rounded-2xl bg-slate-100 p-1">
             <button type="button" onClick={() => setPhase('planned')} className={`rounded-xl px-4 py-1.5 text-sm font-black transition ${phase === 'planned' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>
@@ -376,7 +270,9 @@ export function ProfitabilityPanel({
         </div>
 
         {!activeProfile ? (
-          <p className="mt-4 rounded-2xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 ring-1 ring-amber-100">צור מחירון למוצר כדי לחשב רווחיות.</p>
+          <p className="mt-4 rounded-2xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 ring-1 ring-amber-100">
+            אין מחירון למוצר הזה. גלול למטה ל<strong>מחירון</strong> כדי ליצור אותו.
+          </p>
         ) : !selectedOrderId ? (
           <p className="mt-4 text-sm font-bold text-slate-500">בחר הזמנה כדי להתחיל.</p>
         ) : (
@@ -463,10 +359,15 @@ export function ProfitabilityPanel({
                 <div className={`mt-3 rounded-2xl px-4 py-3 ${breakdown.profit >= 0 ? 'bg-emerald-600' : 'bg-rose-600'} text-white`}>
                   <div className="flex items-baseline justify-between">
                     <span className="text-sm font-black opacity-80">רווח</span>
-                    <span className="text-2xl font-black tabular-nums" dir="ltr">{money(breakdown.profit, currency)}</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="rounded-lg bg-white/20 px-2 py-0.5 text-lg font-black tabular-nums">
+                        {breakdown.marginPercent.toFixed(1)}%
+                      </span>
+                      <span className="text-2xl font-black tabular-nums" dir="ltr">{money(breakdown.profit, currency)}</span>
+                    </div>
                   </div>
                   <div className="mt-1 flex items-baseline justify-between text-xs font-bold opacity-80">
-                    <span>{breakdown.marginPercent.toFixed(1)}% מרווח</span>
+                    <span>מרווח</span>
                     <span dir="ltr">{money(breakdown.profitPerUnit, currency)} ליחידה</span>
                   </div>
                   {showIls ? (
@@ -538,6 +439,14 @@ export function ProfitabilityPanel({
                   <td className="py-2 text-left tabular-nums" dir="ltr">{money(actualBreakdown.profit, currency)}</td>
                   <td className={`py-2 text-left tabular-nums ${actualBreakdown.profit >= plannedBreakdown.profit ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
                     {`${actualBreakdown.profit - plannedBreakdown.profit > 0 ? '+' : ''}${money(actualBreakdown.profit - plannedBreakdown.profit, currency)}`}
+                  </td>
+                </tr>
+                <tr className="text-xs font-black text-slate-500">
+                  <td className="py-1">מרווח</td>
+                  <td className="py-1 text-left tabular-nums" dir="ltr">{plannedBreakdown.marginPercent.toFixed(1)}%</td>
+                  <td className="py-1 text-left tabular-nums" dir="ltr">{actualBreakdown.marginPercent.toFixed(1)}%</td>
+                  <td className={`py-1 text-left tabular-nums ${actualBreakdown.marginPercent >= plannedBreakdown.marginPercent ? 'text-emerald-600' : 'text-rose-600'}`} dir="ltr">
+                    {`${actualBreakdown.marginPercent - plannedBreakdown.marginPercent > 0 ? '+' : ''}${(actualBreakdown.marginPercent - plannedBreakdown.marginPercent).toFixed(1)}%`}
                   </td>
                 </tr>
                 {comparisonRate ? (

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { SectionCard } from '../../components/layout/SectionCard';
 import { ProfitabilityPanel } from './ProfitabilityPanel';
+import { OrdersOverview } from './OrdersOverview';
+import { CostProfileEditor } from './CostProfileEditor';
 import type { CreateTaskInput } from '../../domain/tasks/taskMutations';
 import type { Task } from '../../domain/tasks/taskTypes';
 import type {
@@ -357,34 +359,18 @@ export function SalesOpsTab({
         {message ? <p className="mt-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800 ring-1 ring-emerald-100">{message}</p> : null}
       </SectionCard>
 
-      <ProfitabilityPanel
+      <OrdersOverview
         orders={orders}
-        products={products}
-        costProfiles={costProfiles}
+        customers={customers}
+        orderItems={orderItems}
+        allocations={allocations}
         orderCostings={orderCostings}
+        todayISO={todayISO}
         isSaving={isSaving}
-        onAddCostProfile={onAddCostProfile}
-        onEditCostProfile={onEditCostProfile}
-        onAddOrderCosting={onAddOrderCosting}
-        onEditOrderCosting={onEditOrderCosting}
+        onEditSalesOrder={onEditSalesOrder}
       />
 
-      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.4fr]">
-        <SectionCard title="לקוח חדש" description="רק מי שכבר הגיע לפגישה נכנס לכאן.">
-          <div className="grid gap-2">
-            <input className={inputClass()} placeholder="שם לקוח / מרפאה" value={customerDraft.name} onChange={(e) => setCustomerDraft({ ...customerDraft, name: e.target.value })} />
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input className={inputClass()} placeholder="חברה" value={customerDraft.company} onChange={(e) => setCustomerDraft({ ...customerDraft, company: e.target.value })} />
-              <input className={inputClass()} placeholder="מדינה" value={customerDraft.country} onChange={(e) => setCustomerDraft({ ...customerDraft, country: e.target.value })} />
-              <input className={inputClass()} placeholder="עיר" value={customerDraft.city} onChange={(e) => setCustomerDraft({ ...customerDraft, city: e.target.value })} />
-              <input className={inputClass()} placeholder="WhatsApp" value={customerDraft.whatsapp} onChange={(e) => setCustomerDraft({ ...customerDraft, whatsapp: e.target.value })} />
-            </div>
-            <input className={inputClass()} placeholder="Email" value={customerDraft.email} onChange={(e) => setCustomerDraft({ ...customerDraft, email: e.target.value })} />
-            <textarea className={inputClass('min-h-20')} placeholder="הערות פגישה" value={customerDraft.notes} onChange={(e) => setCustomerDraft({ ...customerDraft, notes: e.target.value })} />
-            <button className={buttonClass('dark')} disabled={isSaving} onClick={() => void submitCustomer()}>הוסף לקוח</button>
-          </div>
-        </SectionCard>
-
+      <div className="grid gap-5 xl:grid-cols-[1.4fr_0.9fr]">
         <SectionCard title="לקוחות" description="בחר לקוח כדי לפתוח הזמנות ופעולות.">
           <div className="grid gap-2">
             {customers.length === 0 ? <p className="text-sm font-bold text-slate-500">אין לקוחות עדיין.</p> : customers.map((customer) => {
@@ -399,6 +385,21 @@ export function SalesOpsTab({
                 </button>
               );
             })}
+          </div>
+        </SectionCard>
+
+        <SectionCard title="לקוח חדש" description="רק מי שכבר הגיע לפגישה נכנס לכאן.">
+          <div className="grid gap-2">
+            <input className={inputClass()} placeholder="שם לקוח / מרפאה" value={customerDraft.name} onChange={(e) => setCustomerDraft({ ...customerDraft, name: e.target.value })} />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input className={inputClass()} placeholder="חברה" value={customerDraft.company} onChange={(e) => setCustomerDraft({ ...customerDraft, company: e.target.value })} />
+              <input className={inputClass()} placeholder="מדינה" value={customerDraft.country} onChange={(e) => setCustomerDraft({ ...customerDraft, country: e.target.value })} />
+              <input className={inputClass()} placeholder="עיר" value={customerDraft.city} onChange={(e) => setCustomerDraft({ ...customerDraft, city: e.target.value })} />
+              <input className={inputClass()} placeholder="WhatsApp" value={customerDraft.whatsapp} onChange={(e) => setCustomerDraft({ ...customerDraft, whatsapp: e.target.value })} />
+            </div>
+            <input className={inputClass()} placeholder="Email" value={customerDraft.email} onChange={(e) => setCustomerDraft({ ...customerDraft, email: e.target.value })} />
+            <textarea className={inputClass('min-h-20')} placeholder="הערות פגישה" value={customerDraft.notes} onChange={(e) => setCustomerDraft({ ...customerDraft, notes: e.target.value })} />
+            <button className={buttonClass('dark')} disabled={isSaving} onClick={() => void submitCustomer()}>הוסף לקוח</button>
           </div>
         </SectionCard>
       </div>
@@ -474,25 +475,15 @@ export function SalesOpsTab({
         </SectionCard>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-        <SectionCard title="מוצרים וספקים" description="קטלוג ידני בסיסי. Shopify יגיע אחר כך.">
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-              <p className="text-sm font-black text-slate-900">מוצר חדש</p>
-              <input className={inputClass()} placeholder="שם מוצר" value={productDraft.name} onChange={(e) => setProductDraft({ ...productDraft, name: e.target.value })} />
-              <input className={inputClass()} placeholder="SKU" value={productDraft.sku} onChange={(e) => setProductDraft({ ...productDraft, sku: e.target.value })} />
-              <button className={buttonClass('light')} onClick={() => void submitProduct()}>הוסף מוצר</button>
-            </div>
-            <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-              <p className="text-sm font-black text-slate-900">ספק חדש</p>
-              <input className={inputClass()} placeholder="שם ספק" value={supplierDraft.name} onChange={(e) => setSupplierDraft({ ...supplierDraft, name: e.target.value })} />
-              <select className={inputClass()} value={supplierDraft.type} onChange={(e) => setSupplierDraft({ ...supplierDraft, type: e.target.value as SupplierType })}>
-                {Object.entries(supplierTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <button className={buttonClass('light')} onClick={() => void submitSupplier()}>הוסף ספק</button>
-            </div>
-          </div>
-        </SectionCard>
+      <ProfitabilityPanel
+        orders={orders}
+        products={products}
+        costProfiles={costProfiles}
+        orderCostings={orderCostings}
+        isSaving={isSaving}
+        onAddOrderCosting={onAddOrderCosting}
+        onEditOrderCosting={onEditOrderCosting}
+      />
 
         <SectionCard title="סבב ייצור" description="סבב אחד = מוצר אחד + צבע אחד.">
           <div className="grid gap-2 sm:grid-cols-2">
@@ -513,7 +504,6 @@ export function SalesOpsTab({
           </div>
           <button className={`${buttonClass('green')} mt-2`} onClick={() => void submitBatch()}>הוסף סבב ייצור</button>
         </SectionCard>
-      </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <SectionCard title="ביקוש והקצאות" description="אדום = אין הקצאה, כתום = חלקי, ירוק = מכוסה.">
@@ -572,6 +562,35 @@ export function SalesOpsTab({
           ))}
         </div>
       </SectionCard>
+
+      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+        <SectionCard title="מוצרים וספקים" description="קטלוג ידני בסיסי. Shopify יגיע אחר כך.">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
+              <p className="text-sm font-black text-slate-900">מוצר חדש</p>
+              <input className={inputClass()} placeholder="שם מוצר" value={productDraft.name} onChange={(e) => setProductDraft({ ...productDraft, name: e.target.value })} />
+              <input className={inputClass()} placeholder="SKU" value={productDraft.sku} onChange={(e) => setProductDraft({ ...productDraft, sku: e.target.value })} />
+              <button className={buttonClass('light')} onClick={() => void submitProduct()}>הוסף מוצר</button>
+            </div>
+            <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
+              <p className="text-sm font-black text-slate-900">ספק חדש</p>
+              <input className={inputClass()} placeholder="שם ספק" value={supplierDraft.name} onChange={(e) => setSupplierDraft({ ...supplierDraft, name: e.target.value })} />
+              <select className={inputClass()} value={supplierDraft.type} onChange={(e) => setSupplierDraft({ ...supplierDraft, type: e.target.value as SupplierType })}>
+                {Object.entries(supplierTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <button className={buttonClass('light')} onClick={() => void submitSupplier()}>הוסף ספק</button>
+            </div>
+          </div>
+        </SectionCard>
+
+        <CostProfileEditor
+          products={products}
+          costProfiles={costProfiles}
+          isSaving={isSaving}
+          onAddCostProfile={onAddCostProfile}
+          onEditCostProfile={onEditCostProfile}
+        />
+      </div>
     </div>
   );
 }
