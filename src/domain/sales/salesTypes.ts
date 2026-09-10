@@ -69,6 +69,10 @@ export interface SalesOrder {
   /** How much money actually landed. Deposits are entered as they arrive. */
   paidAmount?: number | null;
   expectedCloseDate?: string | null;
+  /** Promised delivery window in days. dueDate is derived from it. */
+  deliveryDays?: number | null;
+  /** Day the delivery clock starts. Defaults to the order date. */
+  deliveryStartDate?: string | null;
   dueDate?: string | null;
   notes?: string;
   createdAt: string;

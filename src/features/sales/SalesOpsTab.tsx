@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { SectionCard } from '../../components/layout/SectionCard';
 import { ProfitabilityPanel } from './ProfitabilityPanel';
 import { OrdersOverview } from './OrdersOverview';
 import { CostProfileEditor } from './CostProfileEditor';
+import { DeliveryPlanner } from './DeliveryPlanner';
 import type { CreateTaskInput } from '../../domain/tasks/taskMutations';
 import type { Task } from '../../domain/tasks/taskTypes';
 import type {
@@ -136,6 +137,45 @@ function formatMoney(value: number | null | undefined, currency: string) {
   return `${value.toLocaleString()} ${currency}`;
 }
 
+function AccordionSection({
+  id,
+  title,
+  description,
+  open,
+  onToggle,
+  children,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  open: boolean;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-right ring-1 transition ${
+          open ? 'bg-sky-50 text-slate-950 ring-sky-200' : 'bg-white text-slate-900 ring-slate-200 hover:bg-slate-50'
+        }`}
+        onClick={() => onToggle(open ? '' : id)}
+      >
+        <span>
+          <span className="block text-base font-black">{title}</span>
+          <span className="mt-0.5 block text-xs font-bold text-slate-500">{description}</span>
+        </span>
+        <span className={open ? 'text-sky-700' : 'text-slate-400'}>
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+            <polyline points={open ? '18 15 12 9 6 15' : '6 9 12 15 18 9'} />
+          </svg>
+        </span>
+      </button>
+      {open ? <div className="space-y-5">{children}</div> : null}
+    </div>
+  );
+}
+
 export function SalesOpsTab({
   customers,
   products,
@@ -174,6 +214,27 @@ export function SalesOpsTab({
   const [batchDraft, setBatchDraft] = useState({ productId: '', color: 'white' as ProductColor, supplierId: '', label: '', quantityPlanned: '1000', quantityReceived: '', expectedReadyDate: '' });
   const [allocationDraft, setAllocationDraft] = useState({ orderItemId: '', productionBatchId: '', quantity: '' });
   const [taskDraft, setTaskDraft] = useState({ orderId: '', title: '', dueDate: todayISO });
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'orders';
+    return sessionStorage.getItem('mc-sales-section') ?? 'orders';
+  });
+  const ordersSectionRef = useRef<HTMLDivElement>(null);
+
+  const openSectionAndPersist = (id: string) => {
+    setOpenSection(id);
+    if (typeof window !== 'undefined') sessionStorage.setItem('mc-sales-section', id);
+  };
+
+  /** Jump from the overview table straight into one order's details */
+  const focusOrder = (orderId: string) => {
+    const order = orders.find((entry) => entry.id === orderId);
+    if (!order) return;
+    setSelectedCustomerId(order.customerId);
+    setExpandedOrderId(orderId);
+    openSectionAndPersist('orders');
+    window.setTimeout(() => ordersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  };
 
   const selectedCustomer = customers.find((customer) => customer.id === selectedCustomerId) ?? customers[0] ?? null;
   const visibleOrders = orders.filter((order) => !order.deletedAt);
@@ -368,228 +429,295 @@ export function SalesOpsTab({
         todayISO={todayISO}
         isSaving={isSaving}
         onEditSalesOrder={onEditSalesOrder}
+        onSelectOrder={focusOrder}
       />
 
-      <div className="grid gap-5 xl:grid-cols-[1.4fr_0.9fr]">
-        <SectionCard title="לקוחות" description="בחר לקוח כדי לפתוח הזמנות ופעולות.">
-          <div className="grid gap-2">
-            {customers.length === 0 ? <p className="text-sm font-bold text-slate-500">אין לקוחות עדיין.</p> : customers.map((customer) => {
-              const customerOrders = visibleOrders.filter((order) => order.customerId === customer.id);
-              return (
-                <button key={customer.id} type="button" onClick={() => setSelectedCustomerId(customer.id)} className={`rounded-2xl px-3 py-2 text-right ring-1 transition ${selectedCustomer?.id === customer.id ? 'bg-sky-50 ring-sky-200' : 'bg-white ring-slate-200 hover:bg-slate-50'}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-base font-black text-slate-950">{customer.name}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{customerStatusLabels[customer.status]}</span>
-                  </div>
-                  <p className="mt-1 text-xs font-bold text-slate-500">{customer.country || 'ללא מדינה'} · {customerOrders.length} הזמנות</p>
-                </button>
-              );
-            })}
-          </div>
-        </SectionCard>
-
-        <SectionCard title="לקוח חדש" description="רק מי שכבר הגיע לפגישה נכנס לכאן.">
-          <div className="grid gap-2">
-            <input className={inputClass()} placeholder="שם לקוח / מרפאה" value={customerDraft.name} onChange={(e) => setCustomerDraft({ ...customerDraft, name: e.target.value })} />
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input className={inputClass()} placeholder="חברה" value={customerDraft.company} onChange={(e) => setCustomerDraft({ ...customerDraft, company: e.target.value })} />
-              <input className={inputClass()} placeholder="מדינה" value={customerDraft.country} onChange={(e) => setCustomerDraft({ ...customerDraft, country: e.target.value })} />
-              <input className={inputClass()} placeholder="עיר" value={customerDraft.city} onChange={(e) => setCustomerDraft({ ...customerDraft, city: e.target.value })} />
-              <input className={inputClass()} placeholder="WhatsApp" value={customerDraft.whatsapp} onChange={(e) => setCustomerDraft({ ...customerDraft, whatsapp: e.target.value })} />
-            </div>
-            <input className={inputClass()} placeholder="Email" value={customerDraft.email} onChange={(e) => setCustomerDraft({ ...customerDraft, email: e.target.value })} />
-            <textarea className={inputClass('min-h-20')} placeholder="הערות פגישה" value={customerDraft.notes} onChange={(e) => setCustomerDraft({ ...customerDraft, notes: e.target.value })} />
-            <button className={buttonClass('dark')} disabled={isSaving} onClick={() => void submitCustomer()}>הוסף לקוח</button>
-          </div>
-        </SectionCard>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-        <SectionCard title={selectedCustomer ? `הזמנות - ${selectedCustomer.name}` : 'הזמנות'} description="הזמנה יכולה להיות פוטנציאלית או מאושרת.">
-          {selectedCustomer ? (
-            <div className="space-y-3">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input className={inputClass()} placeholder="שם הזמנה" value={orderDraft.title} onChange={(e) => setOrderDraft({ ...orderDraft, title: e.target.value })} />
-                <select className={inputClass()} value={orderDraft.status} onChange={(e) => setOrderDraft({ ...orderDraft, status: e.target.value as OrderStatus })}>
-                  {Object.entries(orderStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-                <select className={inputClass()} value={orderDraft.source} onChange={(e) => setOrderDraft({ ...orderDraft, source: e.target.value as OrderSource })}>
-                  {Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-                <input className={inputClass()} type="date" value={orderDraft.dueDate} onChange={(e) => setOrderDraft({ ...orderDraft, dueDate: e.target.value })} />
-                <input className={inputClass()} placeholder="סכום" value={orderDraft.amount} onChange={(e) => setOrderDraft({ ...orderDraft, amount: e.target.value })} />
-                <input className={inputClass()} placeholder="מטבע" value={orderDraft.currency} onChange={(e) => setOrderDraft({ ...orderDraft, currency: e.target.value })} />
-              </div>
-              <textarea className={inputClass('min-h-16')} placeholder="הערות הזמנה" value={orderDraft.notes} onChange={(e) => setOrderDraft({ ...orderDraft, notes: e.target.value })} />
-              <button className={buttonClass('green')} disabled={isSaving} onClick={() => void submitOrder()}>הוסף הזמנה</button>
-
-              <div className="space-y-2">
-                {selectedOrders.length === 0 ? <p className="text-sm font-bold text-slate-500">אין הזמנות ללקוח הזה.</p> : selectedOrders.map((order) => (
-                  <div key={order.id} className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+      <div className="space-y-2">
+        <AccordionSection id="customers" title="לקוחות" description="בחירת לקוח והוספת לקוח חדש" open={openSection === 'customers'} onToggle={openSectionAndPersist}>
+        <div className="grid gap-5 xl:grid-cols-[1.4fr_0.9fr]">
+          <SectionCard title="לקוחות" description="בחר לקוח כדי לפתוח הזמנות ופעולות.">
+            <div className="grid gap-2">
+              {customers.length === 0 ? <p className="text-sm font-bold text-slate-500">אין לקוחות עדיין.</p> : customers.map((customer) => {
+                const customerOrders = visibleOrders.filter((order) => order.customerId === customer.id);
+                return (
+                  <button key={customer.id} type="button" onClick={() => setSelectedCustomerId(customer.id)} className={`rounded-2xl px-3 py-2 text-right ring-1 transition ${selectedCustomer?.id === customer.id ? 'bg-sky-50 ring-sky-200' : 'bg-white ring-slate-200 hover:bg-slate-50'}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <strong className="text-slate-950">{order.title}</strong>
-                      <select className={inputClass('py-1 text-xs')} value={order.status} onChange={(e) => void onEditSalesOrder(order.id, { status: e.target.value as OrderStatus })}>
-                        {Object.entries(orderStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                      </select>
+                      <span className="text-base font-black text-slate-950">{customer.name}</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{customerStatusLabels[customer.status]}</span>
                     </div>
-                    <p className="mt-1 text-xs font-bold text-slate-500">{sourceLabels[order.source]} · {formatMoney(order.amount, order.currency)} · יעד {order.dueDate || '-'}</p>
-                  </div>
-                ))}
-              </div>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{customer.country || 'ללא מדינה'} · {customerOrders.length} הזמנות</p>
+                  </button>
+                );
+              })}
             </div>
-          ) : <p className="text-sm font-bold text-slate-500">בחר לקוח קודם.</p>}
-        </SectionCard>
+          </SectionCard>
 
-        <SectionCard title="פריט הזמנה" description="מוצר, צבע, כמות, מחיר ומדבקה כאופציה.">
-          <div className="grid gap-2">
-            <select className={inputClass()} value={itemDraft.orderId} onChange={(e) => setItemDraft({ ...itemDraft, orderId: e.target.value })}>
+          <SectionCard title="לקוח חדש" description="רק מי שכבר הגיע לפגישה נכנס לכאן.">
+            <div className="grid gap-2">
+              <input className={inputClass()} placeholder="שם לקוח / מרפאה" value={customerDraft.name} onChange={(e) => setCustomerDraft({ ...customerDraft, name: e.target.value })} />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input className={inputClass()} placeholder="חברה" value={customerDraft.company} onChange={(e) => setCustomerDraft({ ...customerDraft, company: e.target.value })} />
+                <input className={inputClass()} placeholder="מדינה" value={customerDraft.country} onChange={(e) => setCustomerDraft({ ...customerDraft, country: e.target.value })} />
+                <input className={inputClass()} placeholder="עיר" value={customerDraft.city} onChange={(e) => setCustomerDraft({ ...customerDraft, city: e.target.value })} />
+                <input className={inputClass()} placeholder="WhatsApp" value={customerDraft.whatsapp} onChange={(e) => setCustomerDraft({ ...customerDraft, whatsapp: e.target.value })} />
+              </div>
+              <input className={inputClass()} placeholder="Email" value={customerDraft.email} onChange={(e) => setCustomerDraft({ ...customerDraft, email: e.target.value })} />
+              <textarea className={inputClass('min-h-20')} placeholder="הערות פגישה" value={customerDraft.notes} onChange={(e) => setCustomerDraft({ ...customerDraft, notes: e.target.value })} />
+              <button className={buttonClass('dark')} disabled={isSaving} onClick={() => void submitCustomer()}>הוסף לקוח</button>
+            </div>
+          </SectionCard>
+        </div>
+        </AccordionSection>
+
+        <div ref={ordersSectionRef}>
+        <AccordionSection id="orders" title="הזמנות ופריטים" description="הזמנות הלקוח, פרטי אספקה ופריטים" open={openSection === 'orders'} onToggle={openSectionAndPersist}>
+        <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+          <SectionCard title={selectedCustomer ? `הזמנות - ${selectedCustomer.name}` : 'הזמנות'} description="הזמנה יכולה להיות פוטנציאלית או מאושרת.">
+            {selectedCustomer ? (
+              <div className="space-y-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input className={inputClass()} placeholder="שם הזמנה" value={orderDraft.title} onChange={(e) => setOrderDraft({ ...orderDraft, title: e.target.value })} />
+                  <select className={inputClass()} value={orderDraft.status} onChange={(e) => setOrderDraft({ ...orderDraft, status: e.target.value as OrderStatus })}>
+                    {Object.entries(orderStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                  <select className={inputClass()} value={orderDraft.source} onChange={(e) => setOrderDraft({ ...orderDraft, source: e.target.value as OrderSource })}>
+                    {Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                  <input className={inputClass()} type="date" value={orderDraft.dueDate} onChange={(e) => setOrderDraft({ ...orderDraft, dueDate: e.target.value })} />
+                  <input className={inputClass()} placeholder="סכום" value={orderDraft.amount} onChange={(e) => setOrderDraft({ ...orderDraft, amount: e.target.value })} />
+                  <input className={inputClass()} placeholder="מטבע" value={orderDraft.currency} onChange={(e) => setOrderDraft({ ...orderDraft, currency: e.target.value })} />
+                </div>
+                <textarea className={inputClass('min-h-16')} placeholder="הערות הזמנה" value={orderDraft.notes} onChange={(e) => setOrderDraft({ ...orderDraft, notes: e.target.value })} />
+                <button className={buttonClass('green')} disabled={isSaving} onClick={() => void submitOrder()}>הוסף הזמנה</button>
+
+                <div className="space-y-2">
+                  {selectedOrders.length === 0 ? <p className="text-sm font-bold text-slate-500">אין הזמנות ללקוח הזה.</p> : selectedOrders.map((order) => {
+                    const isExpanded = expandedOrderId === order.id;
+                    return (
+                      <div key={order.id} className={`rounded-2xl bg-white p-3 ring-1 transition ${isExpanded ? 'ring-sky-300' : 'ring-slate-200'}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            className="text-right font-black text-slate-950 hover:text-sky-700"
+                            onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                          >
+                            {order.title}
+                          </button>
+                          <select className={inputClass('py-1 text-xs')} value={order.status} onChange={(e) => void onEditSalesOrder(order.id, { status: e.target.value as OrderStatus })}>
+                            {Object.entries(orderStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                          </select>
+                        </div>
+                        <p className="mt-1 text-xs font-bold text-slate-500">{sourceLabels[order.source]} · {formatMoney(order.amount, order.currency)} · יעד {order.dueDate || '-'}</p>
+
+                        {isExpanded ? (
+                          <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3">
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <label className="grid gap-1">
+                                <span className="text-[11px] font-black text-slate-500">שם הזמנה</span>
+                                <input className={inputClass()} value={order.title} onChange={(e) => void onEditSalesOrder(order.id, { title: e.target.value })} />
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[11px] font-black text-slate-500">מקור</span>
+                                <select className={inputClass()} value={order.source} onChange={(e) => void onEditSalesOrder(order.id, { source: e.target.value as OrderSource })}>
+                                  {Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                                </select>
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[11px] font-black text-slate-500">סכום</span>
+                                <input className={inputClass('text-left tabular-nums')} dir="ltr" value={order.amount ?? ''} onChange={(e) => void onEditSalesOrder(order.id, { amount: e.target.value === '' ? null : Number(e.target.value) })} />
+                              </label>
+                              <label className="grid gap-1">
+                                <span className="text-[11px] font-black text-slate-500">שולם בפועל</span>
+                                <input className={inputClass('text-left tabular-nums')} dir="ltr" value={order.paidAmount ?? ''} onChange={(e) => void onEditSalesOrder(order.id, { paidAmount: e.target.value === '' ? null : Number(e.target.value) })} />
+                              </label>
+                            </div>
+
+                            <DeliveryPlanner
+                              startDate={order.deliveryStartDate || (order.createdAt || todayISO).slice(0, 10)}
+                              deliveryDays={order.deliveryDays ?? null}
+                              dueDate={order.dueDate ?? null}
+                              todayISO={todayISO}
+                              disabled={isSaving}
+                              onChange={(patch) => void onEditSalesOrder(order.id, patch)}
+                            />
+
+                            <textarea
+                              className={inputClass('min-h-16')}
+                              placeholder="הערות הזמנה"
+                              value={order.notes ?? ''}
+                              onChange={(e) => void onEditSalesOrder(order.id, { notes: e.target.value })}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : <p className="text-sm font-bold text-slate-500">בחר לקוח קודם.</p>}
+          </SectionCard>
+
+          <SectionCard title="פריט הזמנה" description="מוצר, צבע, כמות, מחיר ומדבקה כאופציה.">
+            <div className="grid gap-2">
+              <select className={inputClass()} value={itemDraft.orderId} onChange={(e) => setItemDraft({ ...itemDraft, orderId: e.target.value })}>
+                <option value="">בחר הזמנה</option>
+                {selectedOrderOptions.map((order) => <option key={order.id} value={order.id}>{order.title}</option>)}
+              </select>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <select className={inputClass()} value={itemDraft.productId} onChange={(e) => setItemDraft({ ...itemDraft, productId: e.target.value })}>
+                  <option value="">בחר מוצר</option>
+                  {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+                </select>
+                <select className={inputClass()} value={itemDraft.color} onChange={(e) => setItemDraft({ ...itemDraft, color: e.target.value as ProductColor })}>
+                  {colors.map((color) => <option key={color} value={color}>{colorLabels[color]}</option>)}
+                </select>
+                <input className={inputClass()} placeholder="כמות" value={itemDraft.quantity} onChange={(e) => setItemDraft({ ...itemDraft, quantity: e.target.value })} />
+                <input className={inputClass()} placeholder="מחיר יחידה" value={itemDraft.unitPrice} onChange={(e) => setItemDraft({ ...itemDraft, unitPrice: e.target.value })} />
+                <select className={inputClass()} value={itemDraft.priceTier} onChange={(e) => setItemDraft({ ...itemDraft, priceTier: e.target.value as PriceTier })}>
+                  {priceTiers.map((tier) => <option key={tier} value={tier}>{tier}</option>)}
+                </select>
+                <label className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-sm font-black text-slate-700 ring-1 ring-slate-200">
+                  מדבקה
+                  <input type="checkbox" checked={itemDraft.needsSticker} onChange={(e) => setItemDraft({ ...itemDraft, needsSticker: e.target.checked })} />
+                </label>
+              </div>
+              {itemDraft.needsSticker ? (
+                <select className={inputClass()} value={itemDraft.stickerSupplierId} onChange={(e) => setItemDraft({ ...itemDraft, stickerSupplierId: e.target.value })}>
+                  <option value="">ספק מדבקות</option>
+                  {stickerSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                </select>
+              ) : null}
+              <button className={buttonClass('dark')} disabled={isSaving} onClick={() => void submitItem()}>הוסף פריט להזמנה</button>
+            </div>
+          </SectionCard>
+        </div>
+        </AccordionSection>
+        </div>
+
+        <AccordionSection id="profit" title="רווחיות" description="הצעה וסגירת מכירה" open={openSection === 'profit'} onToggle={openSectionAndPersist}>
+        <ProfitabilityPanel
+          orders={orders}
+          products={products}
+          costProfiles={costProfiles}
+          orderCostings={orderCostings}
+          isSaving={isSaving}
+          onAddOrderCosting={onAddOrderCosting}
+          onEditOrderCosting={onEditOrderCosting}
+        />
+        </AccordionSection>
+
+        <AccordionSection id="production" title="ייצור והקצאות" description="סבבי ייצור, ביקוש והקצאה" open={openSection === 'production'} onToggle={openSectionAndPersist}>
+          <SectionCard title="סבב ייצור" description="סבב אחד = מוצר אחד + צבע אחד.">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select className={inputClass()} value={batchDraft.productId} onChange={(e) => setBatchDraft({ ...batchDraft, productId: e.target.value })}>
+                <option value="">מוצר</option>
+                {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+              </select>
+              <select className={inputClass()} value={batchDraft.color} onChange={(e) => setBatchDraft({ ...batchDraft, color: e.target.value as ProductColor })}>
+                {colors.map((color) => <option key={color} value={color}>{colorLabels[color]}</option>)}
+              </select>
+              <select className={inputClass()} value={batchDraft.supplierId} onChange={(e) => setBatchDraft({ ...batchDraft, supplierId: e.target.value })}>
+                <option value="">ספק ייצור</option>
+                {productionSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+              </select>
+              <input className={inputClass()} placeholder="שם סבב" value={batchDraft.label} onChange={(e) => setBatchDraft({ ...batchDraft, label: e.target.value })} />
+              <input className={inputClass()} placeholder="כמות מתוכננת" value={batchDraft.quantityPlanned} onChange={(e) => setBatchDraft({ ...batchDraft, quantityPlanned: e.target.value })} />
+              <input className={inputClass()} type="date" value={batchDraft.expectedReadyDate} onChange={(e) => setBatchDraft({ ...batchDraft, expectedReadyDate: e.target.value })} />
+            </div>
+            <button className={`${buttonClass('green')} mt-2`} onClick={() => void submitBatch()}>הוסף סבב ייצור</button>
+          </SectionCard>
+
+        <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+          <SectionCard title="ביקוש והקצאות" description="אדום = אין הקצאה, כתום = חלקי, ירוק = מכוסה.">
+            <div className="mb-3 grid gap-2 sm:grid-cols-3">
+              <Metric label="מחייב" value={confirmedDemand} tone="emerald" />
+              <Metric label="מוקצה" value={allocatedDemand} tone="sky" />
+              <Metric label="שורות חסרות" value={missingItems.length} tone="rose" />
+            </div>
+            <div className="space-y-2">
+              {openItems.length === 0 ? <p className="text-sm font-bold text-slate-500">אין פריטי הזמנה פתוחים.</p> : openItems.map(({ item, order, customer, product, allocated, missing }) => (
+                <div key={item.id} className={`rounded-2xl p-3 ring-1 ${allocationTone(item.quantity, allocated)}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong>{customer?.name ?? 'לקוח'} · {product?.name ?? 'מוצר'} · {colorLabels[item.color]}</strong>
+                    <span className="text-sm font-black">{allocated}/{item.quantity} מוקצה</span>
+                  </div>
+                  <p className="mt-1 text-xs font-bold opacity-80">{order?.title ?? 'הזמנה'} · חסר {missing} · {item.needsSticker ? 'כולל מדבקה' : 'בלי מדבקה'}</p>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard title="הקצאה ידנית" description="בחר פריט הזמנה וסבב ייצור מתאים.">
+            <div className="grid gap-2">
+              <select className={inputClass()} value={allocationDraft.orderItemId} onChange={(e) => setAllocationDraft({ ...allocationDraft, orderItemId: e.target.value })}>
+                <option value="">פריט הזמנה חסר</option>
+                {missingItems.map(({ item, customer, product, missing }) => <option key={item.id} value={item.id}>{customer?.name} · {product?.name} · {colorLabels[item.color]} · חסר {missing}</option>)}
+              </select>
+              <select className={inputClass()} value={allocationDraft.productionBatchId} onChange={(e) => setAllocationDraft({ ...allocationDraft, productionBatchId: e.target.value })}>
+                <option value="">סבב ייצור</option>
+                {productionBatches.map((batch) => {
+                  const product = products.find((entry) => entry.id === batch.productId);
+                  const allocated = getBatchAllocatedQuantity(batch.id, allocations);
+                  const capacity = batch.quantityReceived ?? batch.quantityPlanned;
+                  return <option key={batch.id} value={batch.id}>{batch.label} · {product?.name} · {colorLabels[batch.color]} · פנוי {Math.max(0, capacity - allocated)}</option>;
+                })}
+              </select>
+              <input className={inputClass()} placeholder="כמות להקצאה" value={allocationDraft.quantity} onChange={(e) => setAllocationDraft({ ...allocationDraft, quantity: e.target.value })} />
+              <button className={buttonClass('dark')} onClick={() => void submitAllocation()}>הקצה מלאי</button>
+            </div>
+          </SectionCard>
+        </div>
+        </AccordionSection>
+
+        <AccordionSection id="tasks" title="משימות" description="משימות שקשורות להזמנה" open={openSection === 'tasks'} onToggle={openSectionAndPersist}>
+        <SectionCard title="משימות להזמנה" description="המשימה תופיע גם במסך המשימות הרגיל וגם תחת ההזמנה.">
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <select className={inputClass()} value={taskDraft.orderId} onChange={(e) => setTaskDraft({ ...taskDraft, orderId: e.target.value })}>
               <option value="">בחר הזמנה</option>
               {selectedOrderOptions.map((order) => <option key={order.id} value={order.id}>{order.title}</option>)}
             </select>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <select className={inputClass()} value={itemDraft.productId} onChange={(e) => setItemDraft({ ...itemDraft, productId: e.target.value })}>
-                <option value="">בחר מוצר</option>
-                {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-              </select>
-              <select className={inputClass()} value={itemDraft.color} onChange={(e) => setItemDraft({ ...itemDraft, color: e.target.value as ProductColor })}>
-                {colors.map((color) => <option key={color} value={color}>{colorLabels[color]}</option>)}
-              </select>
-              <input className={inputClass()} placeholder="כמות" value={itemDraft.quantity} onChange={(e) => setItemDraft({ ...itemDraft, quantity: e.target.value })} />
-              <input className={inputClass()} placeholder="מחיר יחידה" value={itemDraft.unitPrice} onChange={(e) => setItemDraft({ ...itemDraft, unitPrice: e.target.value })} />
-              <select className={inputClass()} value={itemDraft.priceTier} onChange={(e) => setItemDraft({ ...itemDraft, priceTier: e.target.value as PriceTier })}>
-                {priceTiers.map((tier) => <option key={tier} value={tier}>{tier}</option>)}
-              </select>
-              <label className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-sm font-black text-slate-700 ring-1 ring-slate-200">
-                מדבקה
-                <input type="checkbox" checked={itemDraft.needsSticker} onChange={(e) => setItemDraft({ ...itemDraft, needsSticker: e.target.checked })} />
-              </label>
-            </div>
-            {itemDraft.needsSticker ? (
-              <select className={inputClass()} value={itemDraft.stickerSupplierId} onChange={(e) => setItemDraft({ ...itemDraft, stickerSupplierId: e.target.value })}>
-                <option value="">ספק מדבקות</option>
-                {stickerSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-              </select>
-            ) : null}
-            <button className={buttonClass('dark')} disabled={isSaving} onClick={() => void submitItem()}>הוסף פריט להזמנה</button>
+            <input className={inputClass()} placeholder="מה צריך לעשות?" value={taskDraft.title} onChange={(e) => setTaskDraft({ ...taskDraft, title: e.target.value })} />
+            <input className={inputClass()} type="date" value={taskDraft.dueDate} onChange={(e) => setTaskDraft({ ...taskDraft, dueDate: e.target.value })} />
           </div>
-        </SectionCard>
-      </div>
-
-      <ProfitabilityPanel
-        orders={orders}
-        products={products}
-        costProfiles={costProfiles}
-        orderCostings={orderCostings}
-        isSaving={isSaving}
-        onAddOrderCosting={onAddOrderCosting}
-        onEditOrderCosting={onEditOrderCosting}
-      />
-
-        <SectionCard title="סבב ייצור" description="סבב אחד = מוצר אחד + צבע אחד.">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <select className={inputClass()} value={batchDraft.productId} onChange={(e) => setBatchDraft({ ...batchDraft, productId: e.target.value })}>
-              <option value="">מוצר</option>
-              {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-            </select>
-            <select className={inputClass()} value={batchDraft.color} onChange={(e) => setBatchDraft({ ...batchDraft, color: e.target.value as ProductColor })}>
-              {colors.map((color) => <option key={color} value={color}>{colorLabels[color]}</option>)}
-            </select>
-            <select className={inputClass()} value={batchDraft.supplierId} onChange={(e) => setBatchDraft({ ...batchDraft, supplierId: e.target.value })}>
-              <option value="">ספק ייצור</option>
-              {productionSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
-            </select>
-            <input className={inputClass()} placeholder="שם סבב" value={batchDraft.label} onChange={(e) => setBatchDraft({ ...batchDraft, label: e.target.value })} />
-            <input className={inputClass()} placeholder="כמות מתוכננת" value={batchDraft.quantityPlanned} onChange={(e) => setBatchDraft({ ...batchDraft, quantityPlanned: e.target.value })} />
-            <input className={inputClass()} type="date" value={batchDraft.expectedReadyDate} onChange={(e) => setBatchDraft({ ...batchDraft, expectedReadyDate: e.target.value })} />
-          </div>
-          <button className={`${buttonClass('green')} mt-2`} onClick={() => void submitBatch()}>הוסף סבב ייצור</button>
-        </SectionCard>
-
-      <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-        <SectionCard title="ביקוש והקצאות" description="אדום = אין הקצאה, כתום = חלקי, ירוק = מכוסה.">
-          <div className="mb-3 grid gap-2 sm:grid-cols-3">
-            <Metric label="מחייב" value={confirmedDemand} tone="emerald" />
-            <Metric label="מוקצה" value={allocatedDemand} tone="sky" />
-            <Metric label="שורות חסרות" value={missingItems.length} tone="rose" />
-          </div>
-          <div className="space-y-2">
-            {openItems.length === 0 ? <p className="text-sm font-bold text-slate-500">אין פריטי הזמנה פתוחים.</p> : openItems.map(({ item, order, customer, product, allocated, missing }) => (
-              <div key={item.id} className={`rounded-2xl p-3 ring-1 ${allocationTone(item.quantity, allocated)}`}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <strong>{customer?.name ?? 'לקוח'} · {product?.name ?? 'מוצר'} · {colorLabels[item.color]}</strong>
-                  <span className="text-sm font-black">{allocated}/{item.quantity} מוקצה</span>
-                </div>
-                <p className="mt-1 text-xs font-bold opacity-80">{order?.title ?? 'הזמנה'} · חסר {missing} · {item.needsSticker ? 'כולל מדבקה' : 'בלי מדבקה'}</p>
-              </div>
+          <button className={`${buttonClass('green')} mt-2`} onClick={() => void submitTask()}>צור משימה להזמנה</button>
+          <div className="mt-3 grid gap-2">
+            {tasks.filter((task) => task.orderId && selectedOrderOptions.some((order) => order.id === task.orderId)).slice(0, 6).map((task) => (
+              <div key={task.id} className="rounded-2xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 ring-1 ring-slate-200">{task.title}</div>
             ))}
           </div>
         </SectionCard>
+        </AccordionSection>
 
-        <SectionCard title="הקצאה ידנית" description="בחר פריט הזמנה וסבב ייצור מתאים.">
-          <div className="grid gap-2">
-            <select className={inputClass()} value={allocationDraft.orderItemId} onChange={(e) => setAllocationDraft({ ...allocationDraft, orderItemId: e.target.value })}>
-              <option value="">פריט הזמנה חסר</option>
-              {missingItems.map(({ item, customer, product, missing }) => <option key={item.id} value={item.id}>{customer?.name} · {product?.name} · {colorLabels[item.color]} · חסר {missing}</option>)}
-            </select>
-            <select className={inputClass()} value={allocationDraft.productionBatchId} onChange={(e) => setAllocationDraft({ ...allocationDraft, productionBatchId: e.target.value })}>
-              <option value="">סבב ייצור</option>
-              {productionBatches.map((batch) => {
-                const product = products.find((entry) => entry.id === batch.productId);
-                const allocated = getBatchAllocatedQuantity(batch.id, allocations);
-                const capacity = batch.quantityReceived ?? batch.quantityPlanned;
-                return <option key={batch.id} value={batch.id}>{batch.label} · {product?.name} · {colorLabels[batch.color]} · פנוי {Math.max(0, capacity - allocated)}</option>;
-              })}
-            </select>
-            <input className={inputClass()} placeholder="כמות להקצאה" value={allocationDraft.quantity} onChange={(e) => setAllocationDraft({ ...allocationDraft, quantity: e.target.value })} />
-            <button className={buttonClass('dark')} onClick={() => void submitAllocation()}>הקצה מלאי</button>
-          </div>
-        </SectionCard>
-      </div>
-
-      <SectionCard title="משימות להזמנה" description="המשימה תופיע גם במסך המשימות הרגיל וגם תחת ההזמנה.">
-        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-          <select className={inputClass()} value={taskDraft.orderId} onChange={(e) => setTaskDraft({ ...taskDraft, orderId: e.target.value })}>
-            <option value="">בחר הזמנה</option>
-            {selectedOrderOptions.map((order) => <option key={order.id} value={order.id}>{order.title}</option>)}
-          </select>
-          <input className={inputClass()} placeholder="מה צריך לעשות?" value={taskDraft.title} onChange={(e) => setTaskDraft({ ...taskDraft, title: e.target.value })} />
-          <input className={inputClass()} type="date" value={taskDraft.dueDate} onChange={(e) => setTaskDraft({ ...taskDraft, dueDate: e.target.value })} />
-        </div>
-        <button className={`${buttonClass('green')} mt-2`} onClick={() => void submitTask()}>צור משימה להזמנה</button>
-        <div className="mt-3 grid gap-2">
-          {tasks.filter((task) => task.orderId && selectedOrderOptions.some((order) => order.id === task.orderId)).slice(0, 6).map((task) => (
-            <div key={task.id} className="rounded-2xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 ring-1 ring-slate-200">{task.title}</div>
-          ))}
-        </div>
-      </SectionCard>
-
-      <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
-        <SectionCard title="מוצרים וספקים" description="קטלוג ידני בסיסי. Shopify יגיע אחר כך.">
-          <div className="grid gap-3 lg:grid-cols-2">
-            <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-              <p className="text-sm font-black text-slate-900">מוצר חדש</p>
-              <input className={inputClass()} placeholder="שם מוצר" value={productDraft.name} onChange={(e) => setProductDraft({ ...productDraft, name: e.target.value })} />
-              <input className={inputClass()} placeholder="SKU" value={productDraft.sku} onChange={(e) => setProductDraft({ ...productDraft, sku: e.target.value })} />
-              <button className={buttonClass('light')} onClick={() => void submitProduct()}>הוסף מוצר</button>
+        <AccordionSection id="setup" title="הגדרות" description="מוצרים, ספקים ומחירון" open={openSection === 'setup'} onToggle={openSectionAndPersist}>
+        <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+          <SectionCard title="מוצרים וספקים" description="קטלוג ידני בסיסי. Shopify יגיע אחר כך.">
+            <div className="grid gap-3 lg:grid-cols-2">
+              <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                <p className="text-sm font-black text-slate-900">מוצר חדש</p>
+                <input className={inputClass()} placeholder="שם מוצר" value={productDraft.name} onChange={(e) => setProductDraft({ ...productDraft, name: e.target.value })} />
+                <input className={inputClass()} placeholder="SKU" value={productDraft.sku} onChange={(e) => setProductDraft({ ...productDraft, sku: e.target.value })} />
+                <button className={buttonClass('light')} onClick={() => void submitProduct()}>הוסף מוצר</button>
+              </div>
+              <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
+                <p className="text-sm font-black text-slate-900">ספק חדש</p>
+                <input className={inputClass()} placeholder="שם ספק" value={supplierDraft.name} onChange={(e) => setSupplierDraft({ ...supplierDraft, name: e.target.value })} />
+                <select className={inputClass()} value={supplierDraft.type} onChange={(e) => setSupplierDraft({ ...supplierDraft, type: e.target.value as SupplierType })}>
+                  {Object.entries(supplierTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                <button className={buttonClass('light')} onClick={() => void submitSupplier()}>הוסף ספק</button>
+              </div>
             </div>
-            <div className="space-y-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200">
-              <p className="text-sm font-black text-slate-900">ספק חדש</p>
-              <input className={inputClass()} placeholder="שם ספק" value={supplierDraft.name} onChange={(e) => setSupplierDraft({ ...supplierDraft, name: e.target.value })} />
-              <select className={inputClass()} value={supplierDraft.type} onChange={(e) => setSupplierDraft({ ...supplierDraft, type: e.target.value as SupplierType })}>
-                {Object.entries(supplierTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <button className={buttonClass('light')} onClick={() => void submitSupplier()}>הוסף ספק</button>
-            </div>
-          </div>
-        </SectionCard>
+          </SectionCard>
 
-        <CostProfileEditor
-          products={products}
-          costProfiles={costProfiles}
-          isSaving={isSaving}
-          onAddCostProfile={onAddCostProfile}
-          onEditCostProfile={onEditCostProfile}
-        />
+          <CostProfileEditor
+            products={products}
+            costProfiles={costProfiles}
+            isSaving={isSaving}
+            onAddCostProfile={onAddCostProfile}
+            onEditCostProfile={onEditCostProfile}
+          />
+        </div>
+        </AccordionSection>
       </div>
     </div>
   );

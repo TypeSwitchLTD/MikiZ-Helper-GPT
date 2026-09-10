@@ -188,8 +188,9 @@ export function OrdersOverview({
                     <td className="py-2 pl-2">
                       <button
                         type="button"
-                        className="text-right font-black text-slate-950 hover:text-sky-700"
+                        className="text-right font-black text-slate-950 underline decoration-slate-300 decoration-dotted underline-offset-4 transition hover:text-sky-700 hover:decoration-sky-400"
                         onClick={() => onSelectOrder?.(row.order.id)}
+                        title="פתח את ההזמנה לעריכה"
                       >
                         {row.order.title}
                       </button>
@@ -266,7 +267,11 @@ export function OrdersOverview({
                       <span className={`text-[11px] font-black ${row.isLate ? 'text-rose-600' : 'text-slate-500'}`}>
                         {row.order.dueDate || '—'}
                       </span>
-                      {row.isLate ? <p className="text-[10px] font-black text-rose-500">באיחור</p> : null}
+                      {row.isLate ? (
+                        <p className="text-[10px] font-black text-rose-500">באיחור</p>
+                      ) : row.order.deliveryDays != null ? (
+                        <p className="text-[10px] font-bold text-slate-400">{row.order.deliveryDays} ימים</p>
+                      ) : null}
                     </td>
                   </tr>
                 );
