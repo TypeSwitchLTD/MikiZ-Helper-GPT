@@ -8,7 +8,6 @@ import { QuickReminderModal } from "../features/reminders/QuickReminderModal";
 import { SettingsTab } from "../features/settings/SettingsTab";
 import { TasksHubTab } from "../features/tasks/TasksHubTab";
 import { SocialPreviewTab } from "../features/social/SocialPreviewTab";
-import { WorkoutsPreviewTab } from "../features/workouts/WorkoutsPreviewTab";
 import { PersonalTab } from "../features/personal/PersonalTab";
 import { MorningBriefingModal } from "../features/morning/MorningBriefingModal";
 import { CommandCenterModal } from "../features/morning/CommandCenterModal";
@@ -27,7 +26,7 @@ import { normalizeSearch, isSameDatePrefix, addDaysToISO } from "../utils/string
 import { appTabs, type AppTabId } from "./routes";
 import { useMissionControlData } from "./useMissionControlData";
 
-const APP_VERSION = "0.8.28";
+const APP_VERSION = "0.9.0";
 const FOCUS_TIMER_STATE_KEY = "mission-control-focus-timer-state";
 
 // ─── Auth lockout constants ────────────────────────────────────────────────────
@@ -327,12 +326,6 @@ function NavIcon({ tabId, className }: { tabId: string; className?: string }) {
           <path d="M3 7l9-4 9 4-9 4-9-4z" />
           <path d="M3 7v10l9 4 9-4V7" />
           <path d="M12 11v10" />
-        </svg>
-      );
-    case "workouts":
-      return (
-        <svg {...SVG_BASE} className={cls}>
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
         </svg>
       );
     case "reminders":
@@ -1139,8 +1132,6 @@ export function AppShell() {
             onSaveSettings={data.saveSettings}
           />
         );
-      case "workouts":
-        return <WorkoutsPreviewTab />;
       case "personal":
         return (
           <PersonalTab

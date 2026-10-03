@@ -42,6 +42,11 @@ export interface MetaSettings {
   accessToken?: string;
   instagramUserId?: string;
   facebookPageId?: string;
+  /** act_XXXXXXXXX — required for any Ads Insights call */
+  adAccountId?: string;
+  adAccountName?: string;
+  /** Events Manager pixel id */
+  pixelId?: string;
   connectedAt?: string | null;
   tokenExpiresAt?: string | null;
 }

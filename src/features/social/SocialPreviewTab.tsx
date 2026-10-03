@@ -8,6 +8,18 @@ import type { Subtask, Task } from '../../domain/tasks/taskTypes';
 import { isSameDatePrefix, normalizeSearch } from '../../utils/strings';
 import { InstantlyCard } from './InstantlyCard';
 import { MetaConnectCard } from './MetaConnectCard';
+import { MetaAdsDashboard } from './MetaAdsDashboard';
+import { PixelEventsPanel } from './PixelEventsPanel';
+
+type SocialTabId = 'ads' | 'pixel' | 'instagram' | 'leads' | 'tiktok';
+
+const SOCIAL_TABS: Array<{ id: SocialTabId; label: string; disabled?: boolean }> = [
+  { id: 'ads', label: 'מטא אדס' },
+  { id: 'pixel', label: 'פיקסל / אירועים' },
+  { id: 'instagram', label: 'אינסטגרם' },
+  { id: 'leads', label: 'לידים' },
+  { id: 'tiktok', label: 'טיקטוק', disabled: true },
+];
 
 type SourceFilter = 'all' | 'supabase' | 'shopify' | 'ga4' | 'tasks';
 
@@ -234,6 +246,7 @@ export function SocialPreviewTab({
   onCreateTask,
   onSaveSettings,
 }: SocialPreviewTabProps) {
+  const [activeTab, setActiveTab] = useState<SocialTabId>('ads');
   const [configs] = useState<SupabaseLeadTableConfig[]>(loadLeadTableConfigs);
   const [lastSeen, setLastSeen] = useState<Record<string, string>>(loadLeadTableLastSeen);
   const [results, setResults] = useState<SupabaseLeadTableResult[]>([]);
@@ -484,259 +497,305 @@ export function SocialPreviewTab({
         <p className="mt-3 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-black text-slate-600 ring-1 ring-slate-100">{statusMessage}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <MetricCard label="לידים היום" value={results.length ? supabaseTotals.today : '-'} hint="Supabase tables" tone="sky" />
-        <MetricCard label="חדשים מהרענון" value={results.length ? supabaseTotals.sinceLast : '-'} hint="מאז בדיקה קודמת" tone="amber" />
-        <MetricCard label="פולואפים פתוחים" value={openLeadTasks.length} hint={`${todayLeadTasks.length} להיום`} tone="violet" />
-        <MetricCard label="הזמנות היום" value={shopifyStats?.metrics.ordersToday ?? '-'} hint={shopifyStats ? formatMoney(shopifyStats.metrics.revenueToday, shopifyCurrency) : 'Shopify'} tone="emerald" />
-        <MetricCard label="סשנים היום" value={gaStats?.metrics.sessionsToday ?? '-'} hint={gaStats ? `${formatNumber(gaStats.metrics.usersToday)} משתמשים` : 'GA4'} tone="slate" />
+      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-1 rounded-2xl bg-slate-100 p-1">
+        {SOCIAL_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            disabled={tab.disabled}
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-xl px-4 py-2 text-sm font-black transition ${
+              activeTab === tab.id
+                ? 'bg-white text-slate-950 shadow-sm'
+                : tab.disabled
+                  ? 'cursor-not-allowed text-slate-300'
+                  : 'text-slate-500 hover:text-slate-800'
+            }`}
+            title={tab.disabled ? 'יחובר בהמשך' : undefined}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-        <article className="rounded-[1.75rem] bg-white/95 p-4 shadow-soft ring-1 ring-slate-100">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Signal Feed</p>
-              <h3 className="text-xl font-black text-slate-950">מה דורש פעולה</h3>
-            </div>
-            <div className="mission-chip-strip flex gap-2 overflow-x-auto pb-1">
-              {[
-                { id: 'all', label: 'הכל' },
-                { id: 'supabase', label: 'Supabase' },
-                { id: 'shopify', label: 'Shopify' },
-                { id: 'ga4', label: 'GA4' },
-                { id: 'tasks', label: 'משימות' },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSourceFilter(item.id as SourceFilter)}
-                  className={`shrink-0 rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${
-                    sourceFilter === item.id
-                      ? 'bg-slate-950 text-white ring-slate-950'
-                      : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
+      {activeTab === 'ads' ? <MetaAdsDashboard settings={settings} /> : null}
+      {activeTab === 'pixel' ? <PixelEventsPanel settings={settings} /> : null}
 
-          <div className="mt-4 space-y-2">
-            {visibleSignals.length === 0 ? (
-              <div className="rounded-2xl bg-slate-50 px-4 py-6 text-center ring-1 ring-slate-100">
-                <p className="text-sm font-black text-slate-500">אין עדיין סיגנלים להצגה.</p>
-                <p className="mt-1 text-xs font-bold text-slate-400">לחץ רענן דשבורד או ודא שהטבלאות מוגדרות בהגדרות.</p>
-              </div>
-            ) : (
-              visibleSignals.slice(0, 20).map((signal) => (
-                <div key={`${signal.source}-${signal.id}`} className="flex flex-col gap-3 rounded-2xl bg-slate-50 px-3 py-3 ring-1 ring-slate-100 sm:flex-row sm:items-center">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-xl bg-white px-2 py-1 text-[10px] font-black text-slate-500 ring-1 ring-slate-200">{signal.sourceLabel}</span>
-                      {signal.status ? <span className="rounded-xl bg-sky-50 px-2 py-1 text-[10px] font-black text-sky-700 ring-1 ring-sky-100">{signal.status}</span> : null}
-                      {signal.value ? <span className="rounded-xl bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-100">{formatMoney(signal.value)}</span> : null}
-                    </div>
-                    <p className="mt-2 truncate text-sm font-black text-slate-950">{leadTitle(signal)}</p>
-                    <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
-                      {[signal.email, signal.phone, signal.company, signal.project].filter(Boolean).join(' · ') || signal.title}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    {signal.sourceUrl ? (
-                      <a href={signal.sourceUrl} target="_blank" rel="noreferrer" className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-200">
-                        פתח
-                      </a>
-                    ) : null}
-                    {signal.source === 'tasks' ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const task = tasks.find((item) => item.id === signal.id);
-                          if (task) onJumpToTask(task);
-                        }}
-                        className="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
-                      >
-                        למשימה
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => void createFollowUpTask(signal)}
-                        disabled={!onCreateTask}
-                        className="rounded-2xl bg-emerald-500 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
-                      >
-                        פולואפ
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </article>
+      {activeTab === 'instagram' ? (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <MetaConnectCard settings={settings} onSaveSettings={onSaveSettings} />
+          <InstantlyCard settings={settings} />
+        </div>
+      ) : null}
 
-        <div className="space-y-4">
-          <article className="rounded-[1.75rem] bg-gradient-to-l from-emerald-50 to-white p-4 shadow-soft ring-1 ring-emerald-100">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-wider text-emerald-700">Next Best Action</p>
-                <h3 className="mt-1 text-xl font-black text-slate-950">
-                  {todayLeadTasks[0]?.title || openLeadTasks[0]?.title || 'אין פולואפ דחוף כרגע'}
-                </h3>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  הושלמו היום {doneLeadToday} משימות לידים. פתוחות להיום {todayLeadTasks.length}.
-                </p>
-              </div>
-            </div>
-            {todayLeadTasks[0] || openLeadTasks[0] ? (
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => onCompleteTask((todayLeadTasks[0] || openLeadTasks[0]).id)}
-                  className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-white"
-                >
-                  סיים
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onJumpToTask(todayLeadTasks[0] || openLeadTasks[0])}
-                  className="rounded-2xl bg-white px-4 py-2.5 text-sm font-black text-slate-700 ring-1 ring-slate-200"
-                >
-                  פתח
-                </button>
-              </div>
-            ) : null}
-          </article>
+      {activeTab === 'tiktok' ? (
+        <div className="rounded-3xl bg-slate-50 p-6 text-center ring-1 ring-slate-200">
+          <p className="text-base font-black text-slate-700">TikTok Ads עדיין לא מחובר</p>
+          <p className="mt-1 text-sm font-bold text-slate-500">
+            כשהחשבון ייפתח צריך Advertiser ID ו-Access Token מ-TikTok Business.
+          </p>
+        </div>
+      ) : null}
 
+      {activeTab === 'leads' ? (
+        <>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <MetricCard label="לידים היום" value={results.length ? supabaseTotals.today : '-'} hint="Supabase tables" tone="sky" />
+          <MetricCard label="חדשים מהרענון" value={results.length ? supabaseTotals.sinceLast : '-'} hint="מאז בדיקה קודמת" tone="amber" />
+          <MetricCard label="פולואפים פתוחים" value={openLeadTasks.length} hint={`${todayLeadTasks.length} להיום`} tone="violet" />
+          <MetricCard label="הזמנות היום" value={shopifyStats?.metrics.ordersToday ?? '-'} hint={shopifyStats ? formatMoney(shopifyStats.metrics.revenueToday, shopifyCurrency) : 'Shopify'} tone="emerald" />
+          <MetricCard label="סשנים היום" value={gaStats?.metrics.sessionsToday ?? '-'} hint={gaStats ? `${formatNumber(gaStats.metrics.usersToday)} משתמשים` : 'GA4'} tone="slate" />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
           <article className="rounded-[1.75rem] bg-white/95 p-4 shadow-soft ring-1 ring-slate-100">
-            <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Connector Status</p>
-            <div className="mt-3 space-y-2">
-              {[
-                { label: 'Supabase', value: activeConfigs.length ? `${activeConfigs.length} טבלאות` : 'לא מוגדר', ok: activeConfigs.length > 0 },
-                { label: 'Instagram / Meta', value: metaConnected ? 'מחובר' : 'דורש חיבור', ok: metaConnected },
-                { label: 'Shopify', value: settings?.shopify?.shopDomain ? settings.shopify.shopDomain : 'לא מוגדר', ok: Boolean(settings?.shopify?.shopDomain && settings?.shopify?.adminAccessToken) },
-                { label: 'Google Analytics', value: settings?.googleAnalytics?.propertyId ? `Property ${settings.googleAnalytics.propertyId}` : 'לא מוגדר', ok: Boolean(settings?.googleAnalytics?.propertyId) },
-                { label: 'LinkedIn', value: 'API מוגבל, בשלב הבא', ok: false },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
-                  <div className="min-w-0">
-                    <p className="text-xs font-black text-slate-900">{item.label}</p>
-                    <p className="truncate text-[11px] font-bold text-slate-500">{item.value}</p>
-                  </div>
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.ok ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Signal Feed</p>
+                <h3 className="text-xl font-black text-slate-950">מה דורש פעולה</h3>
+              </div>
+              <div className="mission-chip-strip flex gap-2 overflow-x-auto pb-1">
+                {[
+                  { id: 'all', label: 'הכל' },
+                  { id: 'supabase', label: 'Supabase' },
+                  { id: 'shopify', label: 'Shopify' },
+                  { id: 'ga4', label: 'GA4' },
+                  { id: 'tasks', label: 'משימות' },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSourceFilter(item.id as SourceFilter)}
+                    className={`shrink-0 rounded-2xl px-3 py-2 text-xs font-black ring-1 transition ${
+                      sourceFilter === item.id
+                        ? 'bg-slate-950 text-white ring-slate-950'
+                        : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {visibleSignals.length === 0 ? (
+                <div className="rounded-2xl bg-slate-50 px-4 py-6 text-center ring-1 ring-slate-100">
+                  <p className="text-sm font-black text-slate-500">אין עדיין סיגנלים להצגה.</p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">לחץ רענן דשבורד או ודא שהטבלאות מוגדרות בהגדרות.</p>
                 </div>
-              ))}
+              ) : (
+                visibleSignals.slice(0, 20).map((signal) => (
+                  <div key={`${signal.source}-${signal.id}`} className="flex flex-col gap-3 rounded-2xl bg-slate-50 px-3 py-3 ring-1 ring-slate-100 sm:flex-row sm:items-center">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-xl bg-white px-2 py-1 text-[10px] font-black text-slate-500 ring-1 ring-slate-200">{signal.sourceLabel}</span>
+                        {signal.status ? <span className="rounded-xl bg-sky-50 px-2 py-1 text-[10px] font-black text-sky-700 ring-1 ring-sky-100">{signal.status}</span> : null}
+                        {signal.value ? <span className="rounded-xl bg-emerald-50 px-2 py-1 text-[10px] font-black text-emerald-700 ring-1 ring-emerald-100">{formatMoney(signal.value)}</span> : null}
+                      </div>
+                      <p className="mt-2 truncate text-sm font-black text-slate-950">{leadTitle(signal)}</p>
+                      <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
+                        {[signal.email, signal.phone, signal.company, signal.project].filter(Boolean).join(' · ') || signal.title}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      {signal.sourceUrl ? (
+                        <a href={signal.sourceUrl} target="_blank" rel="noreferrer" className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-200">
+                          פתח
+                        </a>
+                      ) : null}
+                      {signal.source === 'tasks' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const task = tasks.find((item) => item.id === signal.id);
+                            if (task) onJumpToTask(task);
+                          }}
+                          className="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                        >
+                          למשימה
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void createFollowUpTask(signal)}
+                          disabled={!onCreateTask}
+                          className="rounded-2xl bg-emerald-500 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+                        >
+                          פולואפ
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </article>
-        </div>
-      </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <InstantlyCard settings={settings} />
-        <MetaConnectCard settings={settings} onSaveSettings={onSaveSettings} />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <article className="rounded-[1.75rem] bg-white/95 p-4 shadow-soft ring-1 ring-emerald-100">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-wider text-emerald-600">Shopify</p>
-              <h3 className="text-lg font-black text-slate-950">מכירות והזמנות</h3>
-            </div>
-            <button type="button" onClick={() => void refreshShopify()} className="rounded-2xl bg-emerald-500 px-4 py-2 text-xs font-black text-white">
-              רענן
-            </button>
-          </div>
-          {shopifyStats ? (
-            <>
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                <MetricCard label="הזמנות היום" value={shopifyStats.metrics.ordersToday} hint="נוצרו היום" tone="emerald" />
-                <MetricCard label="פתוחות" value={shopifyStats.metrics.openOrders} hint="דורשות טיפול" tone="amber" />
-                <MetricCard label="לקוחות חדשים" value={shopifyStats.metrics.customersToday} hint="היום" tone="sky" />
+          <div className="space-y-4">
+            <article className="rounded-[1.75rem] bg-gradient-to-l from-emerald-50 to-white p-4 shadow-soft ring-1 ring-emerald-100">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-wider text-emerald-700">Next Best Action</p>
+                  <h3 className="mt-1 text-xl font-black text-slate-950">
+                    {todayLeadTasks[0]?.title || openLeadTasks[0]?.title || 'אין פולואפ דחוף כרגע'}
+                  </h3>
+                  <p className="mt-1 text-xs font-bold text-slate-500">
+                    הושלמו היום {doneLeadToday} משימות לידים. פתוחות להיום {todayLeadTasks.length}.
+                  </p>
+                </div>
               </div>
-              <div className="mt-4 space-y-2">
-                {shopifyStats.recentOrders.slice(0, 4).map((order) => (
-                  <div key={order.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+              {todayLeadTasks[0] || openLeadTasks[0] ? (
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onCompleteTask((todayLeadTasks[0] || openLeadTasks[0]).id)}
+                    className="rounded-2xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-white"
+                  >
+                    סיים
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onJumpToTask(todayLeadTasks[0] || openLeadTasks[0])}
+                    className="rounded-2xl bg-white px-4 py-2.5 text-sm font-black text-slate-700 ring-1 ring-slate-200"
+                  >
+                    פתח
+                  </button>
+                </div>
+              ) : null}
+            </article>
+
+            <article className="rounded-[1.75rem] bg-white/95 p-4 shadow-soft ring-1 ring-slate-100">
+              <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Connector Status</p>
+              <div className="mt-3 space-y-2">
+                {[
+                  { label: 'Supabase', value: activeConfigs.length ? `${activeConfigs.length} טבלאות` : 'לא מוגדר', ok: activeConfigs.length > 0 },
+                  { label: 'Instagram / Meta', value: metaConnected ? 'מחובר' : 'דורש חיבור', ok: metaConnected },
+                  { label: 'Shopify', value: settings?.shopify?.shopDomain ? settings.shopify.shopDomain : 'לא מוגדר', ok: Boolean(settings?.shopify?.shopDomain && settings?.shopify?.adminAccessToken) },
+                  { label: 'Google Analytics', value: settings?.googleAnalytics?.propertyId ? `Property ${settings.googleAnalytics.propertyId}` : 'לא מוגדר', ok: Boolean(settings?.googleAnalytics?.propertyId) },
+                  { label: 'LinkedIn', value: 'API מוגבל, בשלב הבא', ok: false },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-900">{order.name} · {order.customerName || order.email || 'לקוח'}</p>
-                      <p className="text-[11px] font-bold text-slate-500">{order.fulfillmentStatus} · {formatTime(order.createdAt)}</p>
+                      <p className="text-xs font-black text-slate-900">{item.label}</p>
+                      <p className="truncate text-[11px] font-bold text-slate-500">{item.value}</p>
                     </div>
-                    <span className="shrink-0 text-sm font-black text-emerald-700">{formatMoney(order.totalPrice, order.currency || shopifyCurrency)}</span>
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.ok ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                   </div>
                 ))}
               </div>
-            </>
-          ) : (
-            <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500 ring-1 ring-slate-100">
-              הוסף Shopify store domain ו-Admin access token בהגדרות, ואז לחץ רענן.
-            </div>
-          )}
-        </article>
-
-        <article className="rounded-[1.75rem] bg-white/95 p-4 shadow-soft ring-1 ring-sky-100">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-wider text-sky-600">Google Analytics</p>
-              <h3 className="text-lg font-black text-slate-950">תנועה והמרות</h3>
-            </div>
-            <button type="button" onClick={() => void refreshGoogleAnalytics()} className="rounded-2xl bg-sky-600 px-4 py-2 text-xs font-black text-white">
-              רענן
-            </button>
-          </div>
-          {gaStats ? (
-            <>
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                <MetricCard label="סשנים 7 ימים" value={gaStats.metrics.sessions7d} hint="כל הערוצים" tone="sky" />
-                <MetricCard label="משתמשים" value={gaStats.metrics.users7d} hint="7 ימים" tone="violet" />
-                <MetricCard label="המרות" value={gaStats.metrics.conversions7d || '-'} hint="7 ימים" tone="emerald" />
-              </div>
-              <div className="mt-4 space-y-2">
-                {gaStats.channels.map((channel) => (
-                  <div key={channel.channel} className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="truncate text-sm font-black text-slate-900">{channel.channel}</p>
-                      <p className="shrink-0 text-xs font-black text-sky-700">{formatNumber(channel.sessions)} סשנים</p>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
-                      <div
-                        className="h-full rounded-full bg-sky-400"
-                        style={{ width: `${Math.min(100, Math.max(4, (channel.sessions / Math.max(1, gaStats.metrics.sessions7d)) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500 ring-1 ring-slate-100">
-              הוסף GA4 Property ID בהגדרות. ב-Cloudflare צריך להוסיף גם service account.
-            </div>
-          )}
-        </article>
-      </div>
-
-      {contentTasks.length > 0 ? (
-        <div>
-          <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-500">תוכן וסושיאל פתוח</p>
-          <div className="mission-chip-strip flex gap-3 overflow-x-auto pb-2">
-            {contentTasks.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => onJumpToTask(task)}
-                className="shrink-0 rounded-2xl bg-white px-4 py-3 text-right shadow-soft ring-1 ring-slate-100 transition hover:ring-sky-200"
-                style={{ minWidth: '220px', maxWidth: '260px' }}
-              >
-                <p className="truncate text-sm font-black text-slate-900">{task.title}</p>
-                <p className="mt-1 text-[11px] font-bold text-slate-400">
-                  {task.projectId || 'ללא פרויקט'} · {task.bucket === 'today' ? 'היום' : task.bucket === 'weekly' ? 'השבוע' : 'Backlog'}
-                </p>
-              </button>
-            ))}
+            </article>
           </div>
         </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <InstantlyCard settings={settings} />
+          <MetaConnectCard settings={settings} onSaveSettings={onSaveSettings} />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <article className="rounded-[1.75rem] bg-white/95 p-4 shadow-soft ring-1 ring-emerald-100">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-emerald-600">Shopify</p>
+                <h3 className="text-lg font-black text-slate-950">מכירות והזמנות</h3>
+              </div>
+              <button type="button" onClick={() => void refreshShopify()} className="rounded-2xl bg-emerald-500 px-4 py-2 text-xs font-black text-white">
+                רענן
+              </button>
+            </div>
+            {shopifyStats ? (
+              <>
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <MetricCard label="הזמנות היום" value={shopifyStats.metrics.ordersToday} hint="נוצרו היום" tone="emerald" />
+                  <MetricCard label="פתוחות" value={shopifyStats.metrics.openOrders} hint="דורשות טיפול" tone="amber" />
+                  <MetricCard label="לקוחות חדשים" value={shopifyStats.metrics.customersToday} hint="היום" tone="sky" />
+                </div>
+                <div className="mt-4 space-y-2">
+                  {shopifyStats.recentOrders.slice(0, 4).map((order) => (
+                    <div key={order.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-slate-900">{order.name} · {order.customerName || order.email || 'לקוח'}</p>
+                        <p className="text-[11px] font-bold text-slate-500">{order.fulfillmentStatus} · {formatTime(order.createdAt)}</p>
+                      </div>
+                      <span className="shrink-0 text-sm font-black text-emerald-700">{formatMoney(order.totalPrice, order.currency || shopifyCurrency)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500 ring-1 ring-slate-100">
+                הוסף Shopify store domain ו-Admin access token בהגדרות, ואז לחץ רענן.
+              </div>
+            )}
+          </article>
+
+          <article className="rounded-[1.75rem] bg-white/95 p-4 shadow-soft ring-1 ring-sky-100">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-sky-600">Google Analytics</p>
+                <h3 className="text-lg font-black text-slate-950">תנועה והמרות</h3>
+              </div>
+              <button type="button" onClick={() => void refreshGoogleAnalytics()} className="rounded-2xl bg-sky-600 px-4 py-2 text-xs font-black text-white">
+                רענן
+              </button>
+            </div>
+            {gaStats ? (
+              <>
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <MetricCard label="סשנים 7 ימים" value={gaStats.metrics.sessions7d} hint="כל הערוצים" tone="sky" />
+                  <MetricCard label="משתמשים" value={gaStats.metrics.users7d} hint="7 ימים" tone="violet" />
+                  <MetricCard label="המרות" value={gaStats.metrics.conversions7d || '-'} hint="7 ימים" tone="emerald" />
+                </div>
+                <div className="mt-4 space-y-2">
+                  {gaStats.channels.map((channel) => (
+                    <div key={channel.channel} className="rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="truncate text-sm font-black text-slate-900">{channel.channel}</p>
+                        <p className="shrink-0 text-xs font-black text-sky-700">{formatNumber(channel.sessions)} סשנים</p>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
+                        <div
+                          className="h-full rounded-full bg-sky-400"
+                          style={{ width: `${Math.min(100, Math.max(4, (channel.sessions / Math.max(1, gaStats.metrics.sessions7d)) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500 ring-1 ring-slate-100">
+                הוסף GA4 Property ID בהגדרות. ב-Cloudflare צריך להוסיף גם service account.
+              </div>
+            )}
+          </article>
+        </div>
+
+        {contentTasks.length > 0 ? (
+          <div>
+            <p className="mb-3 text-[11px] font-black uppercase tracking-wider text-slate-500">תוכן וסושיאל פתוח</p>
+            <div className="mission-chip-strip flex gap-3 overflow-x-auto pb-2">
+              {contentTasks.map((task) => (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={() => onJumpToTask(task)}
+                  className="shrink-0 rounded-2xl bg-white px-4 py-3 text-right shadow-soft ring-1 ring-slate-100 transition hover:ring-sky-200"
+                  style={{ minWidth: '220px', maxWidth: '260px' }}
+                >
+                  <p className="truncate text-sm font-black text-slate-900">{task.title}</p>
+                  <p className="mt-1 text-[11px] font-bold text-slate-400">
+                    {task.projectId || 'ללא פרויקט'} · {task.bucket === 'today' ? 'היום' : task.bucket === 'weekly' ? 'השבוע' : 'Backlog'}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        </>
       ) : null}
     </section>
   );

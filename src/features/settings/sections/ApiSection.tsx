@@ -1,4 +1,6 @@
 import { SectionCard } from '../../../components/layout/SectionCard';
+import { ConnectionStatusPanel } from '../ConnectionStatusPanel';
+import type { AppSettings } from '../../../domain/settings/settingsTypes';
 import type { SettingsFormState, UpdateFieldFn, LeadTableSettingsRow } from '../settingsFormTypes';
 
 interface ApiSectionProps {
@@ -10,6 +12,7 @@ interface ApiSectionProps {
   apiTestStatus: string;
   onTestMorningApi: () => void;
   onTestTableStatsApi: () => void;
+  settings: AppSettings | null;
 }
 
 export function ApiSection({
@@ -21,12 +24,17 @@ export function ApiSection({
   apiTestStatus,
   onTestMorningApi,
   onTestTableStatsApi,
+  settings,
 }: ApiSectionProps) {
   return (
     <SectionCard
       title="API / Cloud / Tokens"
       description="כל החיבורים החיצוניים: Cloudflare, Android, Supabase ו-ElevenLabs. הגדרות נשמרות דרך Cloud Sync."
     >
+      <div className="mb-4">
+        <ConnectionStatusPanel settings={settings} />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <label className="field-card lg:col-span-2">
           <span>Cloudflare Publish endpoint</span>
@@ -57,6 +65,16 @@ export function ApiSection({
           <span>Meta / Facebook App ID</span>
           <input className="ltr text-left" value={form.metaAppId} onChange={(e) => updateField('metaAppId', e.target.value)} placeholder="App ID מ-developers.facebook.com" />
           <small className="text-xs font-bold text-slate-500">נדרש לחיבור Instagram Business דרך Facebook Login. App Secret שמור ב-Cloudflare env.</small>
+        </label>
+        <label className="field-card">
+          <span>Meta Ad Account ID</span>
+          <input className="ltr text-left" value={form.metaAdAccountId} onChange={(e) => updateField('metaAdAccountId', e.target.value)} placeholder="act_1234567890" />
+          <small className="text-xs font-bold text-slate-500">Ads Manager → למעלה ליד שם החשבון. בלעדיו אין נתוני פרסום.</small>
+        </label>
+        <label className="field-card">
+          <span>Meta Pixel ID</span>
+          <input className="ltr text-left" value={form.metaPixelId} onChange={(e) => updateField('metaPixelId', e.target.value)} placeholder="1234567890123456" />
+          <small className="text-xs font-bold text-slate-500">Events Manager → Data Sources → מתחת לשם הפיקסל.</small>
         </label>
 
         <label className="field-card">

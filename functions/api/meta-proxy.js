@@ -124,5 +124,164 @@ export async function onRequest(context) {
     });
   }
 
+  // ── Token health + granted scopes ─────────────────────────────────────────
+  // Backs the connection indicator: a token can exist and still be useless
+  // if it lacks ads_read or has expired.
+  if (action === 'token_debug') {
+    const { accessToken } = body;
+    if (!accessToken) return json({ ok: false, error: 'Missing accessToken' }, 400);
+
+    const appId = env.FACEBOOK_APP_ID || '';
+    const appSecret = env.FACEBOOK_APP_SECRET || '';
+    const appToken = appId && appSecret ? `${appId}|${appSecret}` : accessToken;
+
+    const res = await fetch(`${GRAPH}/debug_token?input_token=${accessToken}&access_token=${appToken}`);
+    const data = await res.json().catch(() => null);
+    if (!res.ok || data?.error) {
+      return json({ ok: false, error: data?.error?.message ?? 'Token debug failed' }, 502);
+    }
+    const info = data?.data ?? {};
+    const scopes = info.scopes ?? [];
+    return json({
+      ok: true,
+      valid: Boolean(info.is_valid),
+      scopes,
+      hasAdsRead: scopes.includes('ads_read'),
+      expiresAt: info.expires_at ? new Date(info.expires_at * 1000).toISOString() : null,
+      checkedAt: new Date().toISOString(),
+    });
+  }
+
+  // ── List ad accounts reachable with this token ────────────────────────────
+  if (action === 'ad_accounts') {
+    const { accessToken } = body;
+    if (!accessToken) return json({ ok: false, error: 'Missing accessToken' }, 400);
+
+    const res = await fetch(
+      `${GRAPH}/me/adaccounts?fields=id,account_id,name,currency,account_status&limit=50&access_token=${accessToken}`,
+    );
+    const data = await res.json().catch(() => null);
+    if (!res.ok || data?.error) {
+      return json({ ok: false, error: data?.error?.message ?? 'Could not list ad accounts' }, 502);
+    }
+    return json({
+      ok: true,
+      accounts: (data?.data ?? []).map((a) => ({
+        id: a.id,
+        accountId: a.account_id,
+        name: a.name,
+        currency: a.currency,
+        active: a.account_status === 1,
+      })),
+    });
+  }
+
+  // ── Campaign-level spend, efficiency and conversions ──────────────────────
+  if (action === 'ads_insights') {
+    const { accessToken, adAccountId, datePreset = 'last_7d', level = 'campaign' } = body;
+    if (!accessToken || !adAccountId) {
+      return json({ ok: false, error: 'Missing accessToken or adAccountId' }, 400);
+    }
+    const account = String(adAccountId).startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+
+    const fields = [
+      'campaign_id', 'campaign_name', 'adset_name', 'ad_name',
+      'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm', 'reach', 'frequency',
+      'actions', 'action_values', 'cost_per_action_type',
+    ].join(',');
+
+    const url = `${GRAPH}/${account}/insights?level=${level}&date_preset=${datePreset}`
+      + `&fields=${fields}&limit=200&access_token=${accessToken}`;
+
+    const res = await fetch(url);
+    const data = await res.json().catch(() => null);
+    if (!res.ok || data?.error) {
+      return json({
+        ok: false,
+        error: data?.error?.message ?? 'Insights request failed',
+        code: data?.error?.code ?? null,
+      }, 502);
+    }
+
+    // Meta returns conversions as an untyped bag of action types. Pull the
+    // few that matter and leave the rest alone.
+    const pickAction = (list, type) =>
+      Number((list ?? []).find((a) => a.action_type === type)?.value ?? 0);
+
+    const rows = (data?.data ?? []).map((row) => {
+      const purchases = pickAction(row.actions, 'purchase')
+        || pickAction(row.actions, 'omni_purchase')
+        || pickAction(row.actions, 'offsite_conversion.fb_pixel_purchase');
+      const leads = pickAction(row.actions, 'lead')
+        || pickAction(row.actions, 'offsite_conversion.fb_pixel_lead');
+      const revenue = Number((row.action_values ?? []).find((a) =>
+        a.action_type === 'purchase' || a.action_type === 'omni_purchase'
+        || a.action_type === 'offsite_conversion.fb_pixel_purchase')?.value ?? 0);
+      const spend = Number(row.spend ?? 0);
+
+      return {
+        campaignId: row.campaign_id ?? null,
+        campaignName: row.campaign_name ?? row.adset_name ?? row.ad_name ?? '—',
+        adsetName: row.adset_name ?? null,
+        adName: row.ad_name ?? null,
+        spend,
+        impressions: Number(row.impressions ?? 0),
+        clicks: Number(row.clicks ?? 0),
+        reach: Number(row.reach ?? 0),
+        frequency: Number(row.frequency ?? 0),
+        ctr: Number(row.ctr ?? 0),
+        cpc: Number(row.cpc ?? 0),
+        cpm: Number(row.cpm ?? 0),
+        purchases,
+        leads,
+        revenue,
+        roas: spend > 0 && revenue > 0 ? revenue / spend : null,
+        costPerPurchase: purchases > 0 ? spend / purchases : null,
+        costPerLead: leads > 0 ? spend / leads : null,
+      };
+    });
+
+    return json({ ok: true, datePreset, level, rows, checkedAt: new Date().toISOString() });
+  }
+
+  // ── Pixel health: is it actually receiving events? ────────────────────────
+  if (action === 'pixel_stats') {
+    const { accessToken, pixelId } = body;
+    if (!accessToken || !pixelId) {
+      return json({ ok: false, error: 'Missing accessToken or pixelId' }, 400);
+    }
+
+    const [infoRes, statsRes] = await Promise.all([
+      fetch(`${GRAPH}/${pixelId}?fields=id,name,last_fired_time,is_unavailable&access_token=${accessToken}`),
+      fetch(`${GRAPH}/${pixelId}/stats?aggregation=event&access_token=${accessToken}`),
+    ]);
+
+    const info = await infoRes.json().catch(() => null);
+    if (!infoRes.ok || info?.error) {
+      return json({ ok: false, error: info?.error?.message ?? 'Pixel lookup failed' }, 502);
+    }
+    const stats = statsRes.ok ? await statsRes.json().catch(() => null) : null;
+
+    const events = {};
+    for (const entry of stats?.data ?? []) {
+      for (const point of entry?.data ?? []) {
+        const name = point.value ?? point.event ?? 'unknown';
+        events[name] = (events[name] ?? 0) + Number(point.count ?? 0);
+      }
+    }
+
+    return json({
+      ok: true,
+      pixel: {
+        id: info?.id ?? pixelId,
+        name: info?.name ?? '',
+        lastFiredTime: info?.last_fired_time ?? null,
+        unavailable: Boolean(info?.is_unavailable),
+      },
+      events,
+      checkedAt: new Date().toISOString(),
+    });
+  }
+
   return json({ ok: false, error: `Unknown action: ${action}` }, 400);
 }

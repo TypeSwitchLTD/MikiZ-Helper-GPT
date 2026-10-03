@@ -144,6 +144,8 @@ function toFormState(s: AppSettings): SettingsFormState {
     instagramAccessTokenPlaceholder: s.socialConnections?.instagram?.accessTokenPlaceholder ?? '',
     instantlyApiKey: s.instantly?.apiKey ?? '',
     metaAppId: s.meta?.appId ?? '',
+    metaAdAccountId: s.meta?.adAccountId ?? '',
+    metaPixelId: s.meta?.pixelId ?? '',
     shopifyShopDomain: s.shopify?.shopDomain ?? '',
     shopifyAdminAccessToken: s.shopify?.adminAccessToken ?? '',
     googleAnalyticsPropertyId: s.googleAnalytics?.propertyId ?? '',
@@ -482,7 +484,12 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
         instagram: { enabled: currentForm.instagramEnabled, username: currentForm.instagramUsername, accessTokenPlaceholder: currentForm.instagramAccessTokenPlaceholder, lastCheckedAt: settings.socialConnections?.instagram?.lastCheckedAt ?? null },
       },
       instantly: { apiKey: currentForm.instantlyApiKey || undefined },
-      meta: { ...settings.meta, appId: currentForm.metaAppId || undefined },
+      meta: {
+        ...settings.meta,
+        appId: currentForm.metaAppId || undefined,
+        adAccountId: currentForm.metaAdAccountId || undefined,
+        pixelId: currentForm.metaPixelId || undefined,
+      },
       shopify: { shopDomain: currentForm.shopifyShopDomain || undefined, adminAccessToken: currentForm.shopifyAdminAccessToken || undefined },
       googleAnalytics: { propertyId: currentForm.googleAnalyticsPropertyId || undefined },
       taskGroupOrder: currentForm.taskGroupOrder,
@@ -646,7 +653,7 @@ export function SettingsTab({ settings, isSaving, onSaveSettings, onPushCloud, o
           <ConnectDeviceSection settings={settings} />
           <PushNotificationsSection settings={settings} onSaveSettings={onSaveSettings} />
           <ApiSection
-            form={form} updateField={updateField}
+            form={form} updateField={updateField} settings={settings}
             leadTableSettings={leadTableSettings} updateLeadTableSetting={updateLeadTableSetting}
             leadTableSettingsStatus={leadTableSettingsStatus} apiTestStatus={apiTestStatus}
             onTestMorningApi={() => void handleTestMorningApi()} onTestTableStatsApi={() => void handleTestTableStatsApi()}

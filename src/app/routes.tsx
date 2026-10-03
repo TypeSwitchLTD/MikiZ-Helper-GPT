@@ -1,4 +1,4 @@
-export type AppTabId = "tasks" | "focus" | "processes" | "sales" | "social" | "workouts" | "personal" | "reminders" | "settings";
+export type AppTabId = "tasks" | "focus" | "processes" | "sales" | "social" | "personal" | "reminders" | "settings";
 
 export interface AppTab {
   id: AppTabId;
@@ -35,11 +35,6 @@ export const appTabs: AppTab[] = [
     label: "לידים וסושיאל",
     mobileLabel: "סושיאל",
     description: "Instantly, Instagram, LinkedIn ומשימות תוכן עתידיות",
-  },
-  {
-    id: "workouts",
-    label: "אימונים",
-    description: "אזור עתידי לאימוני בוקר, הפסקות ותנועה",
   },
   {
     id: "personal",
